@@ -72,7 +72,9 @@ Route::middleware('auth')->group(function () {
     // Reports
     Route::prefix('report')->name('report.')->group(function () {
         Route::get('/aktif', [ReportController::class, 'aktif'])->name('aktif');
+        Route::get('/training', [ReportController::class, 'training'])->name('training');
         Route::get('/resign', [ReportController::class, 'resign'])->name('resign');
+        Route::get('/fraud', [ReportController::class, 'fraud'])->name('fraud');
     });
     
     // Settings - Super Admin & Admin only

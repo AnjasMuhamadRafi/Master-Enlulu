@@ -51,8 +51,10 @@
                     <i class="bi bi-chevron-down submenu-chevron"></i>
                 </a>
                 <ul class="submenu" id="report-submenu">
-                    <li><a href="{{ route('report.aktif') }}"><i class="bi bi-bar-chart"></i><span class="menu-text">Report Karyawan Aktif</span></a></li>
-                    <li><a href="{{ route('report.resign') }}"><i class="bi bi-bar-chart"></i><span class="menu-text">Report Karyawan Resign</span></a></li>
+                    <li><a href="{{ route('report.aktif') }}"><i class="bi bi-check-circle" style="color:#198754;"></i><span class="menu-text">Report Karyawan Aktif</span></a></li>
+                    <li><a href="{{ route('report.training') }}"><i class="bi bi-mortarboard" style="color:#fd7e14;"></i><span class="menu-text">Report Karyawan Training</span></a></li>
+                    <li><a href="{{ route('report.resign') }}"><i class="bi bi-x-circle" style="color:#dc3545;"></i><span class="menu-text">Report Karyawan Resign</span></a></li>
+                    <li><a href="{{ route('report.fraud') }}"><i class="bi bi-shield-exclamation" style="color:#fff;"></i><span class="menu-text">Report Karyawan Fraud</span></a></li>
                 </ul>
             </li>
             

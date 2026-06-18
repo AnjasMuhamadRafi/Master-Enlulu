@@ -136,49 +136,7 @@
     </div>
 </div>
 
-<!-- Pagination -->
-@if($employees->hasPages())
-<div class="d-flex justify-content-center mt-4 mb-4">
-    <nav aria-label="Page navigation">
-        <ul class="pagination pagination-sm mb-0 flex-wrap">
-            {{-- Previous Page Link --}}
-            @if ($employees->onFirstPage())
-                <li class="page-item disabled">
-                    <span class="page-link">← Previous</span>
-                </li>
-            @else
-                <li class="page-item">
-                    <a class="page-link" href="{{ $employees->previousPageUrl() }}&search={{ request('search') }}&posisi={{ request('posisi') }}&penempatan={{ request('penempatan') }}">← Previous</a>
-                </li>
-            @endif
-
-            {{-- Pagination Elements --}}
-            @foreach ($employees->getUrlRange(1, $employees->lastPage()) as $page => $url)
-                @if ($page == $employees->currentPage())
-                    <li class="page-item active">
-                        <span class="page-link">{{ $page }}</span>
-                    </li>
-                @else
-                    <li class="page-item">
-                        <a class="page-link" href="{{ $url }}&search={{ request('search') }}&posisi={{ request('posisi') }}&penempatan={{ request('penempatan') }}">{{ $page }}</a>
-                    </li>
-                @endif
-            @endforeach
-
-            {{-- Next Page Link --}}
-            @if ($employees->hasMorePages())
-                <li class="page-item">
-                    <a class="page-link" href="{{ $employees->nextPageUrl() }}&search={{ request('search') }}&posisi={{ request('posisi') }}&penempatan={{ request('penempatan') }}">Next →</a>
-                </li>
-            @else
-                <li class="page-item disabled">
-                    <span class="page-link">Next →</span>
-                </li>
-            @endif
-        </ul>
-    </nav>
-</div>
-@endif
+{{ $employees->links() }}
 @else
     <div class="alert alert-info" role="alert">
         <i class="bi bi-info-circle"></i> Tidak ada data karyawan aktif yang ditemukan.

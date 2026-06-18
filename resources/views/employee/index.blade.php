@@ -162,6 +162,8 @@
                     <option value="Aktif" {{ request('status') == 'Aktif' ? 'selected' : '' }}>Aktif</option>
                     <option value="Training" {{ request('status') == 'Training' ? 'selected' : '' }}>Training</option>
                     <option value="Resign" {{ request('status') == 'Resign' ? 'selected' : '' }}>Resign</option>
+                    <option value="Cancel" {{ request('status') == 'Cancel' ? 'selected' : '' }}>Cancel</option>
+                    <option value="Fraud" {{ request('status') == 'Fraud' ? 'selected' : '' }}>Fraud</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -226,6 +228,8 @@
                     <th>TYPE LOKASI</th>
                     <th>LOKASI KERJA</th>
                     <th>AREA KERJA</th>
+                    <th>NO HP</th>
+                    <th>TGL MASUK</th>
                     <th>STATUS KERJA</th>
                     <th>BANK</th>
                     <th>NOREK</th>
@@ -245,6 +249,8 @@
                     <td>{{ $emp->type_lokasi ?? '-' }}</td>
                     <td>{{ $emp->penempatan ?? '-' }}</td>
                     <td>{{ $emp->area_kerja ?? '-' }}</td>
+                    <td>{{ $emp->no_hp ?? '-' }}</td>
+                    <td>{{ optional($emp->tanggal_masuk)->format('d/m/Y') ?? '-' }}</td>
                     <td>
                         @php
                         $statusClass = match($emp->status ?? 'Aktif') {
@@ -269,6 +275,9 @@
                         @endif
                     </td>
                     <td>
+                        <a href="{{ route('employee.show', $emp) }}" class="btn btn-sm btn-info" title="Detail">
+                            <i class="bi bi-eye"></i>
+                        </a>
                         <a href="{{ route('employee.edit', $emp) }}" class="btn btn-sm btn-warning">
                             <i class="bi bi-pencil"></i>
                         </a>
@@ -288,12 +297,7 @@
     </div>
 </div>
 
-<div class="mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <small class="text-muted">Halaman {{ $employees->currentPage() }} dari {{ $employees->lastPage() }} (Total: {{ $employees->total() }} data)</small>
-    </div>
-    {{ $employees->links() }}
-</div>
+{{ $employees->links() }}
 @else
 <div class="alert alert-info">
     <i class="bi bi-info-circle"></i> Belum ada data karyawan.
@@ -310,86 +314,6 @@
         margin-bottom: 20px;
     }
 
-    /* Simple pagination styling */
-    .mt-4 {
-        margin-top: 30px !important;
-    }
-
-    .mt-4 nav {
-        background: white;
-        padding: 15px;
-        border-radius: 6px;
-        border: 1px solid #e9ecef;
-        display: flex;
-        justify-content: center;
-    }
-
-    .mt-4 nav ul {
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        justify-content: center;
-        align-items: center;
-        list-style: none;
-    }
-
-    .mt-4 nav li {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-    }
-
-    .mt-4 nav a,
-    .mt-4 nav span {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 38px;
-        height: 38px;
-        padding: 0 10px !important;
-        font-size: 14px;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        text-decoration: none;
-        color: #0066cc;
-        background: white;
-        transition: all 0.3s ease;
-        white-space: nowrap;
-    }
-
-    .mt-4 nav a:hover {
-        background: #f8f9fa;
-        border-color: #0066cc;
-        color: #0052a3;
-    }
-
-    .mt-4 nav [aria-current="page"] {
-        background: #FF6B35 !important;
-        color: white !important;
-        border-color: #FF6B35 !important;
-        font-weight: bold;
-    }
-
-    .mt-4 nav svg {
-        display: none !important;
-    }
-
-    /* Mobile responsive */
-    @media (max-width: 576px) {
-        .mt-4 nav ul {
-            gap: 5px;
-        }
-
-        .mt-4 nav a,
-        .mt-4 nav span {
-            min-width: 32px;
-            height: 32px;
-            padding: 0 6px !important;
-            font-size: 12px;
-        }
-    }
 </style>
 
 <!-- Delete Confirmation Modal -->

@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\Employee;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -81,12 +82,16 @@ class EmployeeController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Aturan validasi field master data karyawan (dipakai store & update).
+     * Bagian Biodata (kecuali keterangan) & Emergency Contact wajib;
+     * Banking & Penempatan Kerja opsional.
      */
-    public function store(Request $request)
+    private function masterDataRules(): array
     {
-        $validated = $request->validate([
-            'nik' => 'required|unique:employees,nik|regex:/^[0-9]{16}$/|digits:16',
+        return [
+            // Identitas & pekerjaan
+            'nik_enlulu' => 'nullable|string|max:50',
+            'nik_os' => 'nullable|string|max:50',
             'nama_ktp' => 'required|string|max:100',
             'kode_vendor' => 'nullable|string|max:50',
             'posisi' => 'nullable|string|max:100',
@@ -96,20 +101,89 @@ class EmployeeController extends Controller
             'no_rekening' => 'nullable|string|max:30',
             'nama_bank' => 'nullable|string|max:50',
             'nama_di_rekening' => 'nullable|string|max:100',
-            'status' => 'nullable|in:Aktif,Training,Resign',
+            'status' => 'nullable|in:Aktif,Training,Resign,Cancel,Fraud',
             'note1' => 'nullable|string|max:500',
-        ], [
+
+            // A. Biodata (wajib, kecuali keterangan_biodata)
+            'tempat_lahir' => 'required|string|max:100',
+            'tanggal_lahir' => 'required|date',
+            'jenis_kelamin' => 'required|in:Pria,Wanita',
+            'agama' => 'required|string|max:30',
+            'pendidikan' => 'required|string|max:30',
+            'status_pernikahan' => 'required|string|max:30',
+            'jumlah_anak' => 'nullable|integer|min:0|max:50',
+            'alamat' => 'required|string|max:255',
+            'kelurahan' => 'required|string|max:100',
+            'kecamatan' => 'required|string|max:100',
+            'kota' => 'required|string|max:100',
+            'propinsi' => 'required|string|max:100',
+            'status_tempat_tinggal' => 'required|string|max:30',
+            'no_hp' => 'required|string|max:20',
+            'no_kk' => 'required|string|max:20',
+            'email' => 'required|email|max:100',
+            'no_bpjs_tk' => 'nullable|string|max:30',
+            'no_bpjs_kesehatan' => 'nullable|string|max:30',
+            'keterangan_biodata' => 'nullable|string|max:500',
+
+            // B. Emergency Contact (wajib)
+            'ec_nama' => 'required|string|max:100',
+            'ec_alamat' => 'required|string|max:255',
+            'ec_no_hp' => 'required|string|max:20',
+            'ec_hubungan' => 'required|string|max:50',
+
+            // E. Penempatan Kerja (opsional)
+            'nama_customer' => 'nullable|string|max:150',
+            'tanggal_masuk' => 'nullable|date',
+            'tanggal_keluar' => 'nullable|date',
+            'tanggal_perpanjangan_terakhir' => 'nullable|date',
+            'keterangan_perpanjangan' => 'nullable|string|max:500',
+            'no_pks_masuk' => 'nullable|string|max:100',
+            'no_pks_perpanjangan' => 'nullable|string|max:100',
+            'nama_perekrut' => 'nullable|string|max:100',
+        ];
+    }
+
+    /**
+     * Pesan validasi berbahasa Indonesia.
+     */
+    private function validationMessages(): array
+    {
+        return [
             'nik.required' => 'NIK harus diisi',
             'nik.unique' => 'NIK sudah terdaftar dalam sistem',
             'nik.regex' => 'NIK harus terdiri dari 16 angka',
             'nik.digits' => 'NIK harus terdiri dari 16 angka',
             'nama_ktp.required' => 'Nama harus diisi',
             'status.in' => 'Status tidak valid',
-        ]);
+            'jenis_kelamin.in' => 'Jenis kelamin tidak valid',
+            'email.email' => 'Format e-mail tidak valid',
+            'foto.required' => 'Foto wajah harus diunggah',
+            'foto.image' => 'File foto harus berupa gambar',
+            'foto.max' => 'Ukuran foto maksimal 2 MB',
+            'required' => 'Field ini harus diisi',
+        ];
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(Request $request)
+    {
+        $rules = array_merge([
+            'nik' => 'required|unique:employees,nik|regex:/^[0-9]{16}$/|digits:16',
+            'foto' => 'required|image|max:10240',
+        ], $this->masterDataRules());
+
+        $validated = $request->validate($rules, $this->validationMessages());
 
         // Auto-fill nik_ktp dan nama_lengkap with nik and nama_ktp respectively
         $validated['nik_ktp'] = $validated['nik'];
         $validated['nama_lengkap'] = $validated['nama_ktp'];
+
+        // Upload & konversi foto wajah ke JPG
+        if ($request->hasFile('foto')) {
+            $validated['foto'] = $this->storePhotoAsJpg($request->file('foto'));
+        }
 
         $employee = Employee::create($validated);
         
@@ -179,31 +253,27 @@ class EmployeeController extends Controller
             }
         }
         
-        $validated = $request->validate([
+        $rules = array_merge([
             'nik' => 'required|unique:employees,nik,' . $employee->nik . ',nik|regex:/^[0-9]{16}$/|digits:16',
-            'nama_ktp' => 'required|string|max:100',
-            'kode_vendor' => 'nullable|string|max:50',
-            'posisi' => 'nullable|string|max:100',
-            'penempatan' => 'nullable|string|max:100',
-            'type_lokasi' => 'nullable|string|max:50',
-            'area_kerja' => 'nullable|string|max:100',
-            'no_rekening' => 'nullable|string|max:30',
-            'nama_bank' => 'nullable|string|max:50',
-            'nama_di_rekening' => 'nullable|string|max:100',
-            'status' => 'nullable|in:Aktif,Training,Resign',
-            'note1' => 'nullable|string|max:500',
-        ], [
-            'nik.required' => 'NIK harus diisi',
-            'nik.unique' => 'NIK sudah terdaftar dalam sistem',
-            'nik.regex' => 'NIK harus terdiri dari 16 angka',
-            'nik.digits' => 'NIK harus terdiri dari 16 angka',
-            'nama_ktp.required' => 'Nama harus diisi',
-            'status.in' => 'Status tidak valid',
-        ]);
+            'foto' => 'nullable|image|max:10240',
+        ], $this->masterDataRules());
+
+        $validated = $request->validate($rules, $this->validationMessages());
 
         // Auto-fill nik_ktp dan nama_lengkap with nik and nama_ktp respectively
         $validated['nik_ktp'] = $validated['nik'];
         $validated['nama_lengkap'] = $validated['nama_ktp'];
+
+        // Upload & konversi foto wajah baru ke JPG (hapus yang lama jika ada)
+        if ($request->hasFile('foto')) {
+            if ($employee->foto && Storage::disk('public')->exists($employee->foto)) {
+                Storage::disk('public')->delete($employee->foto);
+            }
+            $validated['foto'] = $this->storePhotoAsJpg($request->file('foto'));
+        } else {
+            // Jangan timpa foto lama dengan null bila tidak ada upload baru
+            unset($validated['foto']);
+        }
 
         $oldValues = $employee->getAttributes();
         $employee->update($validated);
@@ -276,6 +346,65 @@ class EmployeeController extends Controller
     }
 
     /**
+     * Konversi foto upload ke JPG terkompresi dan simpan ke storage.
+     * - Max dimensi 1200px (maintain aspect ratio)
+     * - Kualitas JPG 78% → ukuran file sangat kecil di server
+     */
+    private function storePhotoAsJpg(\Illuminate\Http\UploadedFile $file): string
+    {
+        $tmpPath = $file->getRealPath();
+        $mime    = $file->getMimeType() ?? '';
+
+        $source = match (true) {
+            str_contains($mime, 'jpeg') => @imagecreatefromjpeg($tmpPath),
+            str_contains($mime, 'png')  => @imagecreatefrompng($tmpPath),
+            str_contains($mime, 'gif')  => @imagecreatefromgif($tmpPath),
+            str_contains($mime, 'webp') => @imagecreatefromwebp($tmpPath),
+            str_contains($mime, 'bmp')  => @imagecreatefrombmp($tmpPath),
+            default                     => @imagecreatefromjpeg($tmpPath),
+        };
+
+        // Fallback: simpan asli jika GD gagal baca
+        if (!$source) {
+            return $file->store('employee_photos', 'public');
+        }
+
+        $origW  = imagesx($source);
+        $origH  = imagesy($source);
+        $maxDim = 1200;
+
+        if ($origW > $maxDim || $origH > $maxDim) {
+            $ratio  = min($maxDim / $origW, $maxDim / $origH);
+            $newW   = (int) round($origW * $ratio);
+            $newH   = (int) round($origH * $ratio);
+            $canvas = imagecreatetruecolor($newW, $newH);
+            // Isi background putih (untuk PNG transparan)
+            imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
+            imagecopyresampled($canvas, $source, 0, 0, 0, 0, $newW, $newH, $origW, $origH);
+            imagedestroy($source);
+            $source = $canvas;
+        } else {
+            // Tetap flatten ke canvas baru agar PNG transparan → putih
+            $canvas = imagecreatetruecolor($origW, $origH);
+            imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
+            imagecopy($canvas, $source, 0, 0, 0, 0, $origW, $origH);
+            imagedestroy($source);
+            $source = $canvas;
+        }
+
+        // Simpan ke file temp lalu upload ke storage
+        $tmpJpg = tempnam(sys_get_temp_dir(), 'empphoto_') . '.jpg';
+        imagejpeg($source, $tmpJpg, 78);
+        imagedestroy($source);
+
+        $storagePath = 'employee_photos/' . uniqid('photo_') . '.jpg';
+        Storage::disk('public')->put($storagePath, file_get_contents($tmpJpg));
+        @unlink($tmpJpg);
+
+        return $storagePath;
+    }
+
+    /**
      * Download template CSV untuk import
      */
     public function downloadTemplate()
@@ -293,13 +422,39 @@ class EmployeeController extends Controller
     
     private function generateExcelTemplate()
     {
-        $headers = ['NO', 'NIK KTP', 'NAMA KTP', 'KODE VENDOR', 'POSISI', 'PENEMPATAN', 'TYPE LOKASI', 'AREA KERJA', 'NO REKENING', 'NAMA BANK', 'NAMA DI REKENING', 'STATUS', 'NOTE1'];
-        $sampleData = [
-            ['1', '1234567890123456', 'John Doe KTP', 'VENDOR001', 'Senior Developer', 'Jakarta', 'Kantor', 'Jawa', '1234567890', 'BCA', 'John Doe', 'Aktif', 'Catatan contoh'],
-            ['2', '9876543210123456', 'Jane Smith KTP', 'VENDOR002', 'HR Manager', 'Surabaya', 'Kantor', 'Jawa', '0987654321', 'Mandiri', 'Jane Smith', 'Resign', 'Resign akhir bulan'],
+        $columns = $this->exportColumns();
+        $headers = array_merge(['NO'], array_map(fn ($c) => $c[0], $columns));
+
+        // Contoh nilai per field untuk baris sampel
+        $examples = [
+            'nik_ktp' => '1234567890123456', 'nama_ktp' => 'John Doe',
+            'nik_enlulu' => 'ENL-0001', 'nik_os' => 'OS-12345',
+            'kode_vendor' => 'VENDOR001', 'nama_customer' => 'PT Maju Jaya',
+            'posisi' => 'Sprinter', 'type_lokasi' => 'Cabang', 'penempatan' => 'Jakarta Selatan',
+            'area_kerja' => 'DKI Jakarta', 'status' => 'Aktif',
+            'tempat_lahir' => 'Jakarta', 'tanggal_lahir' => '1995-05-20',
+            'jenis_kelamin' => 'Pria', 'agama' => 'Islam', 'pendidikan' => 'SMA',
+            'status_pernikahan' => 'Single', 'jumlah_anak' => '0',
+            'alamat' => 'Jl. Semangat No.18', 'kelurahan' => 'Menteng Dalam',
+            'kecamatan' => 'Tebet', 'kota' => 'Jakarta Selatan', 'propinsi' => 'DKI Jakarta',
+            'status_tempat_tinggal' => 'Sewa', 'no_hp' => '081234567890',
+            'no_kk' => '1234567890123456', 'email' => 'john@example.com',
+            'no_bpjs_tk' => '1122334455', 'no_bpjs_kesehatan' => '0001234567',
+            'keterangan_biodata' => '',
+            'ec_nama' => 'Budi', 'ec_alamat' => 'Bandung', 'ec_no_hp' => '081200000000', 'ec_hubungan' => 'Orang tua',
+            'nama_bank' => 'BCA', 'no_rekening' => '6830295338', 'nama_di_rekening' => 'John Doe',
+            'tanggal_masuk' => '2024-01-15', 'tanggal_keluar' => '', 'tanggal_perpanjangan_terakhir' => '',
+            'keterangan_perpanjangan' => '', 'no_pks_masuk' => 'PKS/2024/001', 'no_pks_perpanjangan' => '',
+            'note1' => 'Contoh catatan',
+            'nama_perekrut' => 'Ahmad Fauzi',
         ];
 
-        $this->renderSpreadsheet($headers, $sampleData);
+        $sampleRow = ['1'];
+        foreach ($columns as $c) {
+            $sampleRow[] = $examples[$c[1]] ?? '';
+        }
+
+        $this->renderSpreadsheet($headers, [$sampleRow]);
     }
 
     private function renderSpreadsheet(array $headers, array $rows): void
@@ -308,42 +463,122 @@ class EmployeeController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sheet1');
 
+        // Lebar kolom sesuai urutan exportColumns() + kolom NO di depan
+        $columnWidths = [
+            6,   // NO
+            18,  // NIK KTP
+            22,  // NAMA KTP
+            18,  // NIK ENLULU
+            18,  // NIK OS
+            // A. Biodata
+            15,  // TEMPAT LAHIR
+            14,  // TANGGAL LAHIR
+            14,  // JENIS KELAMIN
+            12,  // AGAMA
+            13,  // PENDIDIKAN
+            20,  // STATUS PERNIKAHAN
+            12,  // JUMLAH ANAK
+            30,  // ALAMAT TINGGAL
+            15,  // KELURAHAN
+            15,  // KECAMATAN
+            18,  // KOTA/KABUPATEN
+            15,  // PROPINSI
+            22,  // STATUS TEMPAT TINGGAL
+            15,  // NO HP
+            18,  // NO KK
+            22,  // E-MAIL
+            26,  // NO BPJS KETENAGAKERJAAN
+            20,  // NO BPJS KESEHATAN
+            22,  // KETERANGAN LAIN BIODATA
+            // B. Emergency Contact
+            22,  // EMERGENCY CONTACT NAMA
+            25,  // EMERGENCY CONTACT ALAMAT
+            22,  // EMERGENCY CONTACT NO HP
+            14,  // HUBUNGAN
+            // C. Banking
+            14,  // NAMA BANK
+            16,  // NO REKENING
+            22,  // NAMA PEMILIK REKENING
+            // E. Penempatan Kerja
+            20,  // NAMA CUSTOMER
+            14,  // KODE VENDOR
+            18,  // JABATAN
+            13,  // TYPE LOKASI
+            18,  // LOKASI KERJA
+            14,  // AREA KERJA
+            14,  // TANGGAL MASUK
+            13,  // STATUS KERJA
+            14,  // TANGGAL KELUAR
+            28,  // TANGGAL PERPANJANGAN TERAKHIR
+            25,  // KETERANGAN PERPANJANGAN
+            16,  // NO PKS MASUK
+            20,  // NO PKS PERPANJANGAN
+            22,  // KETERANGAN LAIN-LAIN
+            // Perekrut
+            20,  // NAMA PEREKRUT
+        ];
+
+        foreach ($columnWidths as $index => $width) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($index + 1))->setWidth($width);
+        }
+        // Fallback untuk kolom di luar daftar
+        for ($i = count($columnWidths); $i < count($headers); $i++) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($i + 1))->setWidth(16);
+        }
+
+        // Tinggi header
+        $sheet->getRowDimension(1)->setRowHeight(45);
+
         // Header row
         foreach ($headers as $index => $header) {
-            $column = Coordinate::stringFromColumnIndex($index + 1);
-            $cell = $column . '1';
+            $cell = Coordinate::stringFromColumnIndex($index + 1) . '1';
             $sheet->setCellValueExplicit($cell, (string) $header, DataType::TYPE_STRING);
         }
 
-        // Data rows (force string to keep NIK precision and leading zeros)
+        // Data rows
         foreach ($rows as $rowIndex => $row) {
+            $rowNum = $rowIndex + 2;
+            $sheet->getRowDimension($rowNum)->setRowHeight(18);
             foreach ($row as $colIndex => $value) {
-                $column = Coordinate::stringFromColumnIndex($colIndex + 1);
-                $cell = $column . ($rowIndex + 2);
+                $cell = Coordinate::stringFromColumnIndex($colIndex + 1) . $rowNum;
                 $sheet->setCellValueExplicit($cell, (string) $value, DataType::TYPE_STRING);
             }
         }
 
         $lastColumn = Coordinate::stringFromColumnIndex(count($headers));
-        $lastRow = count($rows) + 1;
+        $lastRow    = count($rows) + 1;
 
+        // Style header: orange background, teks putih tebal, wrap teks, center
         $sheet->getStyle('A1:' . $lastColumn . '1')->applyFromArray([
-            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFF6B35']],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+            'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 10],
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFF6B35']],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical'   => Alignment::VERTICAL_CENTER,
+                'wrapText'   => true,
+            ],
         ]);
 
+        // Style data rows: rata kiri, vertikal center
+        if ($lastRow > 1) {
+            $sheet->getStyle('A2:' . $lastColumn . $lastRow)->applyFromArray([
+                'font'      => ['size' => 10],
+                'alignment' => [
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                    'wrapText' => false,
+                ],
+            ]);
+        }
+
+        // Border tipis seluruh tabel
         $sheet->getStyle('A1:' . $lastColumn . $lastRow)->applyFromArray([
             'borders' => [
                 'allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFD3D3D3']],
             ],
         ]);
 
-        $widths = [8, 16, 20, 16, 16, 14, 18, 16, 14, 14, 14, 20, 18];
-        foreach ($widths as $index => $width) {
-            $column = Coordinate::stringFromColumnIndex($index + 1);
-            $sheet->getColumnDimension($column)->setWidth($width);
-        }
+        // Freeze baris header agar tetap terlihat saat scroll
+        $sheet->freezePane('A2');
 
         $writer = new Xlsx($spreadsheet);
         $writer->save('php://output');
@@ -620,22 +855,7 @@ class EmployeeController extends Controller
                         continue;
                     }
 
-                    $rawData = [
-                        'nik' => $nik,
-                        'nik_ktp' => $nik_ktp,
-                        'nama_ktp' => $columnMap['nama_ktp'] !== null ? trim($row[$columnMap['nama_ktp']] ?? '') : '',
-                        'nama_lengkap' => $columnMap['nama_ktp'] !== null ? trim($row[$columnMap['nama_ktp']] ?? '') : '',
-                        'kode_vendor' => $columnMap['kode_vendor'] !== null ? trim($row[$columnMap['kode_vendor']] ?? '') : '',
-                        'posisi' => $columnMap['posisi'] !== null ? trim($row[$columnMap['posisi']] ?? '') : '',
-                        'penempatan' => $columnMap['penempatan'] !== null ? trim($row[$columnMap['penempatan']] ?? '') : '',
-                        'type_lokasi' => $columnMap['type_lokasi'] !== null ? trim($row[$columnMap['type_lokasi']] ?? '') : '',
-                        'area_kerja' => $columnMap['area_kerja'] !== null ? trim($row[$columnMap['area_kerja']] ?? '') : '',
-                        'no_rekening' => $columnMap['no_rekening'] !== null ? trim($row[$columnMap['no_rekening']] ?? '') : '',
-                        'nama_bank' => $columnMap['nama_bank'] !== null ? trim($row[$columnMap['nama_bank']] ?? '') : '',
-                        'nama_di_rekening' => $columnMap['nama_di_rekening'] !== null ? trim($row[$columnMap['nama_di_rekening']] ?? '') : '',
-                        'status' => $columnMap['status'] !== null ? (trim($row[$columnMap['status']] ?? '') ?: 'Aktif') : 'Aktif',
-                        'note1' => $columnMap['note1'] !== null ? trim($row[$columnMap['note1']] ?? '') : '',
-                    ];
+                    $rawData = $this->buildRowData($nik, $nik_ktp, $row, $columnMap);
 
                     // Check if employee exists
                     $existing = Employee::find($nik);
@@ -790,22 +1010,7 @@ class EmployeeController extends Controller
                         continue;
                     }
 
-                    $rawData = [
-                        'nik' => $nik,
-                        'nik_ktp' => $nik_ktp,
-                        'nama_ktp' => $columnMap['nama_ktp'] !== null ? trim($row[$columnMap['nama_ktp']] ?? '') : '',
-                        'nama_lengkap' => $columnMap['nama_ktp'] !== null ? trim($row[$columnMap['nama_ktp']] ?? '') : '',
-                        'kode_vendor' => $columnMap['kode_vendor'] !== null ? trim($row[$columnMap['kode_vendor']] ?? '') : '',
-                        'posisi' => $columnMap['posisi'] !== null ? trim($row[$columnMap['posisi']] ?? '') : '',
-                        'penempatan' => $columnMap['penempatan'] !== null ? trim($row[$columnMap['penempatan']] ?? '') : '',
-                        'type_lokasi' => $columnMap['type_lokasi'] !== null ? trim($row[$columnMap['type_lokasi']] ?? '') : '',
-                        'area_kerja' => $columnMap['area_kerja'] !== null ? trim($row[$columnMap['area_kerja']] ?? '') : '',
-                        'no_rekening' => $columnMap['no_rekening'] !== null ? trim($row[$columnMap['no_rekening']] ?? '') : '',
-                        'nama_bank' => $columnMap['nama_bank'] !== null ? trim($row[$columnMap['nama_bank']] ?? '') : '',
-                        'nama_di_rekening' => $columnMap['nama_di_rekening'] !== null ? trim($row[$columnMap['nama_di_rekening']] ?? '') : '',
-                        'status' => $columnMap['status'] !== null ? (trim($row[$columnMap['status']] ?? '') ?: 'Aktif') : 'Aktif',
-                        'note1' => $columnMap['note1'] !== null ? trim($row[$columnMap['note1']] ?? '') : '',
-                    ];
+                    $rawData = $this->buildRowData($nik, $nik_ktp, $row, $columnMap);
 
                     // Remove empty strings, keep only non-empty values
                     $dataToUpdate = [];
@@ -931,35 +1136,65 @@ class EmployeeController extends Controller
      */
     private function detectColumnMapping(array $headers): ?array
     {
-        $mapping = [
-            'nik_ktp' => null,
-            'nama_ktp' => null,
-            'kode_vendor' => null,
-            'posisi' => null,
-            'penempatan' => null,
-            'type_lokasi' => null,
-            'area_kerja' => null,
-            'no_rekening' => null,
-            'nama_bank' => null,
-            'nama_di_rekening' => null,
-            'status' => null,
-            'note1' => null,
-        ];
+        // Bangun mapping kosong dari daftar field importable + nik_ktp
+        $mapping = ['nik_ktp' => null];
+        foreach ($this->importableFields() as $field) {
+            $mapping[$field] = null;
+        }
 
         // Aliases dengan PRIORITY ORDER - lebih spesifik dulu, generik belakangan
         $aliases = [
             'nik_ktp' => ['NIK KTP', 'NO KTP', 'NIK'],
-            'nama_ktp' => ['NAMA KTP', 'NAMA'],  // Hanya NAMA KTP atau NAMA
+            'nama_ktp' => ['NAMA SESUAI KTP', 'NAMA KTP', 'NAMA'],
+            'nik_enlulu' => ['NIK ENLULU', 'NIK SEMENTARA ENLULU', 'ENLULU NIK'],
+            'nik_os' => ['NIK OS', 'NIK OUTSOURCING', 'NIK CLIENT'],
             'kode_vendor' => ['KODE VENDOR', 'VENDOR'],
-            'posisi' => ['POSISI', 'JABATAN'],
-            'penempatan' => ['PENEMPATAN', 'LOKASI KERJA', 'LOKASI'],
+            'nama_customer' => ['NAMA CUSTOMER', 'CUSTOMER'],
+            'posisi' => ['JABATAN', 'POSISI'],
+            'penempatan' => ['LOKASI KERJA', 'PENEMPATAN', 'LOKASI'],
             'type_lokasi' => ['TYPE LOKASI', 'TIPE LOKASI'],
             'area_kerja' => ['AREA KERJA', 'AREA'],
             'no_rekening' => ['NO REKENING', 'NO. REKENING', 'NOREK'],
             'nama_bank' => ['NAMA BANK'],
-            'nama_di_rekening' => ['NAMA REKENING', 'NAMA DI REKENING', 'PEMILIK REKENING'],
+            'nama_di_rekening' => ['NAMA PEMILIK REKENING', 'NAMA REKENING', 'NAMA DI REKENING', 'PEMILIK REKENING'],
             'status' => ['STATUS KERJA', 'STATUS'],
-            'note1' => ['NOTE', 'NOTE1', 'CATATAN'],
+            'note1' => ['KETERANGAN LAIN-LAIN', 'KETERANGAN LAIN LAIN', 'NOTE', 'NOTE1', 'CATATAN'],
+
+            // A. Biodata
+            'tempat_lahir' => ['TEMPAT LAHIR'],
+            'tanggal_lahir' => ['TANGGAL LAHIR', 'TGL LAHIR'],
+            'jenis_kelamin' => ['JENIS KELAMIN', 'GENDER', 'KELAMIN'],
+            'agama' => ['AGAMA'],
+            'pendidikan' => ['PENDIDIKAN'],
+            'status_pernikahan' => ['STATUS PERNIKAHAN', 'STATUS NIKAH', 'PERNIKAHAN'],
+            'jumlah_anak' => ['JUMLAH ANAK', 'ANAK'],
+            'alamat' => ['ALAMAT TINGGAL', 'ALAMAT'],
+            'kelurahan' => ['KELURAHAN'],
+            'kecamatan' => ['KECAMATAN'],
+            'kota' => ['KOTA/KABUPATEN', 'KOTA / KABUPATEN', 'KOTA', 'KABUPATEN'],
+            'propinsi' => ['PROPINSI', 'PROVINSI'],
+            'status_tempat_tinggal' => ['STATUS TEMPAT TINGGAL'],
+            'no_hp' => ['NO HP', 'NO. HP', 'NO HANDPHONE', 'HANDPHONE', 'HP'],
+            'no_kk' => ['NO KK', 'NO. KK', 'NOMOR KK', 'KK'],
+            'email' => ['E-MAIL', 'EMAIL'],
+            'no_bpjs_tk' => ['NO BPJS KETENAGAKERJAAN', 'NO. BPJS KETENAGAKERJAAN', 'BPJS KETENAGAKERJAAN', 'BPJS TK'],
+            'no_bpjs_kesehatan' => ['NO BPJS KESEHATAN', 'NO. BPJS KESEHATAN', 'BPJS KESEHATAN'],
+            'keterangan_biodata' => ['KETERANGAN LAIN BIODATA', 'KETERANGAN BIODATA'],
+
+            // B. Emergency Contact
+            'ec_nama' => ['EMERGENCY CONTACT NAMA', 'KONTAK DARURAT NAMA', 'NAMA DARURAT', 'EC NAMA'],
+            'ec_alamat' => ['EMERGENCY CONTACT ALAMAT', 'ALAMAT DARURAT', 'EC ALAMAT', 'EC TEMPAT TINGGAL'],
+            'ec_no_hp' => ['EMERGENCY CONTACT NO HP', 'NO HP DARURAT', 'HP DARURAT', 'EC NO HP', 'EC HP'],
+            'ec_hubungan' => ['HUBUNGAN', 'EC HUBUNGAN'],
+
+            // E. Penempatan Kerja
+            'tanggal_masuk' => ['TANGGAL MASUK', 'TGL MASUK'],
+            'tanggal_keluar' => ['TANGGAL KELUAR', 'TGL KELUAR'],
+            'tanggal_perpanjangan_terakhir' => ['TANGGAL PERPANJANGAN TERAKHIR', 'TGL PERPANJANGAN'],
+            'keterangan_perpanjangan' => ['KETERANGAN PERPANJANGAN'],
+            'no_pks_masuk' => ['NO PKS MASUK', 'NO. PKS MASUK'],
+            'no_pks_perpanjangan' => ['NO PKS PERPANJANGAN', 'NO. PKS PERPANJANGAN'],
+            'nama_perekrut' => ['NAMA PEREKRUT', 'PEREKRUT', 'REFERENSI'],
         ];
 
         // Track kolom mana yang sudah dipake (untuk tidak duplikat)
@@ -986,6 +1221,117 @@ class EmployeeController extends Controller
         }
 
         return $mapping;
+    }
+
+    /**
+     * Daftar field yang dapat diimpor/diekspor (urutan tampilan), selain
+     * nik/nik_ktp/nama_lengkap yang ditangani khusus.
+     */
+    private function importableFields(): array
+    {
+        return [
+            'nama_ktp', 'nik_enlulu', 'nik_os', 'kode_vendor', 'nama_customer', 'posisi', 'penempatan',
+            'type_lokasi', 'area_kerja', 'no_rekening', 'nama_bank', 'nama_di_rekening',
+            'status', 'note1',
+            // A. Biodata
+            'tempat_lahir', 'tanggal_lahir', 'jenis_kelamin', 'agama', 'pendidikan',
+            'status_pernikahan', 'jumlah_anak', 'alamat', 'kelurahan', 'kecamatan',
+            'kota', 'propinsi', 'status_tempat_tinggal', 'no_hp', 'no_kk', 'email',
+            'no_bpjs_tk', 'no_bpjs_kesehatan', 'keterangan_biodata',
+            // B. Emergency Contact
+            'ec_nama', 'ec_alamat', 'ec_no_hp', 'ec_hubungan',
+            // E. Penempatan Kerja
+            'tanggal_masuk', 'tanggal_keluar', 'tanggal_perpanjangan_terakhir',
+            'keterangan_perpanjangan', 'no_pks_masuk', 'no_pks_perpanjangan', 'nama_perekrut',
+        ];
+    }
+
+    /**
+     * Bangun array data baris dari row Excel/CSV sesuai column mapping.
+     */
+    private function buildRowData(string $nik, string $nikKtp, array $row, array $columnMap): array
+    {
+        $data = [
+            'nik' => $nik,
+            'nik_ktp' => $nikKtp,
+            'nama_lengkap' => $columnMap['nama_ktp'] !== null ? trim($row[$columnMap['nama_ktp']] ?? '') : '',
+        ];
+
+        foreach ($this->importableFields() as $field) {
+            $idx = $columnMap[$field] ?? null;
+            $value = $idx !== null ? trim($row[$idx] ?? '') : '';
+            if ($field === 'status') {
+                $value = $value ?: 'Aktif';
+            }
+            $data[$field] = $value;
+        }
+
+        return $data;
+    }
+
+    /**
+     * Definisi kolom export/template: [Header, field].
+     */
+    private function exportColumns(): array
+    {
+        return [
+            // Identitas utama
+            ['NIK KTP', 'nik_ktp'],
+            ['NAMA KTP', 'nama_ktp'],
+            ['NIK ENLULU', 'nik_enlulu'],
+            ['NIK OS', 'nik_os'],
+
+            // A. Biodata
+            ['TEMPAT LAHIR', 'tempat_lahir'],
+            ['TANGGAL LAHIR', 'tanggal_lahir'],
+            ['JENIS KELAMIN', 'jenis_kelamin'],
+            ['AGAMA', 'agama'],
+            ['PENDIDIKAN', 'pendidikan'],
+            ['STATUS PERNIKAHAN', 'status_pernikahan'],
+            ['JUMLAH ANAK', 'jumlah_anak'],
+            ['ALAMAT TINGGAL', 'alamat'],
+            ['KELURAHAN', 'kelurahan'],
+            ['KECAMATAN', 'kecamatan'],
+            ['KOTA/KABUPATEN', 'kota'],
+            ['PROPINSI', 'propinsi'],
+            ['STATUS TEMPAT TINGGAL', 'status_tempat_tinggal'],
+            ['NO HP', 'no_hp'],
+            ['NO KK', 'no_kk'],
+            ['E-MAIL', 'email'],
+            ['NO BPJS KETENAGAKERJAAN', 'no_bpjs_tk'],
+            ['NO BPJS KESEHATAN', 'no_bpjs_kesehatan'],
+            ['KETERANGAN LAIN BIODATA', 'keterangan_biodata'],
+
+            // B. Emergency Contact
+            ['EMERGENCY CONTACT NAMA', 'ec_nama'],
+            ['EMERGENCY CONTACT ALAMAT', 'ec_alamat'],
+            ['EMERGENCY CONTACT NO HP', 'ec_no_hp'],
+            ['HUBUNGAN', 'ec_hubungan'],
+
+            // C. Banking
+            ['NAMA BANK', 'nama_bank'],
+            ['NO REKENING', 'no_rekening'],
+            ['NAMA PEMILIK REKENING', 'nama_di_rekening'],
+
+            // E. Penempatan Kerja
+            ['NAMA CUSTOMER', 'nama_customer'],
+            ['KODE VENDOR', 'kode_vendor'],
+            ['JABATAN', 'posisi'],
+            ['TYPE LOKASI', 'type_lokasi'],
+            ['LOKASI KERJA', 'penempatan'],
+            ['AREA KERJA', 'area_kerja'],
+            ['TANGGAL MASUK', 'tanggal_masuk'],
+            ['STATUS KERJA', 'status'],
+            ['TANGGAL KELUAR', 'tanggal_keluar'],
+            ['TANGGAL PERPANJANGAN TERAKHIR', 'tanggal_perpanjangan_terakhir'],
+            ['KETERANGAN PERPANJANGAN', 'keterangan_perpanjangan'],
+            ['NO PKS MASUK', 'no_pks_masuk'],
+            ['NO PKS PERPANJANGAN', 'no_pks_perpanjangan'],
+            ['KETERANGAN LAIN-LAIN', 'note1'],
+
+            // Perekrut
+            ['NAMA PEREKRUT', 'nama_perekrut'],
+        ];
     }
     
     private function readExcelFile(string $filePath): array
@@ -1103,24 +1449,19 @@ class EmployeeController extends Controller
         }
         
         $employees = $query->orderBy('nik')->get();
-        $headers = ['NO', 'NIK KTP', 'NAMA KTP', 'KODE VENDOR', 'JABATAN', 'TYPE LOKASI', 'LOKASI KERJA', 'AREA KERJA', 'STATUS KERJA', 'BANK', 'NOREK', 'NAMA REKENING', 'NOTE1'];
-        
-        $data = $employees->map(function ($emp, $index) {
-            return [
-                $index + 1,
-                $emp->nik_ktp ?? '-',
-                $emp->nama_ktp ?? '-',
-                $emp->kode_vendor ?? '-',
-                $emp->posisi ?? '-',
-                $emp->type_lokasi ?? '-',
-                $emp->penempatan ?? '-',
-                $emp->area_kerja ?? '-',
-                $emp->status ?? 'Aktif',
-                $emp->nama_bank ?? '-',
-                $emp->no_rekening ?? '-',
-                $emp->nama_di_rekening ?? '-',
-                $emp->note1 ?? '-',
-            ];
+        $columns = $this->exportColumns();
+        $headers = array_merge(['NO'], array_map(fn ($c) => $c[0], $columns));
+
+        $data = $employees->map(function ($emp, $index) use ($columns) {
+            $row = [$index + 1];
+            foreach ($columns as $c) {
+                $val = $emp->getAttribute($c[1]);
+                if ($val instanceof \Carbon\Carbon) {
+                    $val = $val->format('Y-m-d');
+                }
+                $row[] = ($val === null) ? '' : (string) $val;
+            }
+            return $row;
         })->toArray();
         
         // Set filename berdasarkan status filter
@@ -1240,13 +1581,19 @@ class EmployeeController extends Controller
     public function report(Request $request)
     {
         // Get counts by status
-        $totalAktif = Employee::where('status', 'Aktif')->count();
-        $totalResign = Employee::where('status', 'Resign')->count();
         $totalKaryawan = Employee::count();
+        $totalAktif    = Employee::where('status', 'Aktif')->count();
+        $totalTraining = Employee::where('status', 'Training')->count();
+        $totalResign   = Employee::where('status', 'Resign')->count();
+        $totalFraud    = Employee::where('status', 'Fraud')->count();
+        $totalCancel   = Employee::where('status', 'Cancel')->count();
 
         // Get detailed data
         $statusFilter = $request->get('status', 'Aktif');
-        $query = Employee::where('status', $statusFilter);
+        $query = Employee::query();
+        if ($statusFilter !== '') {
+            $query->where('status', $statusFilter);
+        }
 
         // Apply search filter
         if ($request->filled('search')) {
@@ -1273,21 +1620,27 @@ class EmployeeController extends Controller
         $posisi = Employee::distinct()->pluck('posisi')->filter();
 
         // Get breakdown by location and position
-        $byLocation = Employee::where('status', $statusFilter)
-                               ->groupBy('penempatan')
-                               ->selectRaw('penempatan, COUNT(*) as count')
-                               ->get();
-
-        $byPosition = Employee::where('status', $statusFilter)
-                              ->groupBy('posisi')
-                              ->selectRaw('posisi, COUNT(*) as count')
-                              ->get();
+        $locationQuery = Employee::query();
+        $positionQuery = Employee::query();
+        if ($statusFilter !== '') {
+            $locationQuery->where('status', $statusFilter);
+            $positionQuery->where('status', $statusFilter);
+        }
+        $byLocation = $locationQuery->groupBy('penempatan')
+                                    ->selectRaw('penempatan, COUNT(*) as count')
+                                    ->get();
+        $byPosition = $positionQuery->groupBy('posisi')
+                                    ->selectRaw('posisi, COUNT(*) as count')
+                                    ->get();
 
         return view('employee.report', compact(
             'employees',
-            'totalAktif',
-            'totalResign',
             'totalKaryawan',
+            'totalAktif',
+            'totalTraining',
+            'totalResign',
+            'totalFraud',
+            'totalCancel',
             'statusFilter',
             'byLocation',
             'byPosition',

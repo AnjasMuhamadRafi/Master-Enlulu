@@ -21,6 +21,8 @@ class Employee extends Model
     protected $fillable = [
         'nik',
         'nik_ktp',
+        'nik_enlulu',
+        'nik_os',
         'nama_ktp',
         'nama_lengkap',
         'kode_vendor',
@@ -33,9 +35,55 @@ class Employee extends Model
         'nama_di_rekening',
         'status',
         'note1',
+
+        // A. Biodata
+        'tempat_lahir',
+        'tanggal_lahir',
+        'jenis_kelamin',
+        'agama',
+        'pendidikan',
+        'status_pernikahan',
+        'jumlah_anak',
+        'alamat',
+        'kelurahan',
+        'kecamatan',
+        'kota',
+        'propinsi',
+        'status_tempat_tinggal',
+        'no_hp',
+        'no_kk',
+        'email',
+        'no_bpjs_tk',
+        'no_bpjs_kesehatan',
+        'keterangan_biodata',
+
+        // B. Emergency Contact
+        'ec_nama',
+        'ec_alamat',
+        'ec_no_hp',
+        'ec_hubungan',
+
+        // D. Foto Wajah
+        'foto',
+
+        // E. Penempatan Kerja
+        'nama_customer',
+        'tanggal_masuk',
+        'tanggal_keluar',
+        'tanggal_perpanjangan_terakhir',
+        'keterangan_perpanjangan',
+        'no_pks_masuk',
+        'no_pks_perpanjangan',
+        'nama_perekrut',
     ];
 
-    protected $casts = [];
+    protected $casts = [
+        'tanggal_lahir' => 'date',
+        'tanggal_masuk' => 'date',
+        'tanggal_keluar' => 'date',
+        'tanggal_perpanjangan_terakhir' => 'date',
+        'jumlah_anak' => 'integer',
+    ];
 
     /**
      * Get list of positions managed by this ADMIN/PIC employee

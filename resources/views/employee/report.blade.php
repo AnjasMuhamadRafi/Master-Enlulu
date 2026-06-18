@@ -19,61 +19,91 @@
 
 {{-- Summary Cards --}}
 <div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card">
+    <div class="col-md-2">
+        <div class="card summary-card" onclick="filterStatus('')" style="cursor:pointer;">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="text-muted mb-1">Total Karyawan</h6>
+                        <h6 class="text-muted mb-1">Total</h6>
                         <h3 class="mb-0">{{ $totalKaryawan }}</h3>
                     </div>
-                    <div style="font-size: 2.5rem; color: #FF6B35; opacity: 0.2;">
+                    <div style="font-size: 2rem; color: #FF6B35; opacity: 0.2;">
                         <i class="bi bi-people-fill"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card">
+    <div class="col-md-2">
+        <div class="card summary-card" onclick="filterStatus('Aktif')" style="cursor:pointer;">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="text-muted mb-1">Karyawan Aktif</h6>
+                        <h6 class="text-muted mb-1">Aktif</h6>
                         <h3 class="mb-0" style="color: #198754;">{{ $totalAktif }}</h3>
                     </div>
-                    <div style="font-size: 2.5rem; color: #198754; opacity: 0.2;">
+                    <div style="font-size: 2rem; color: #198754; opacity: 0.2;">
                         <i class="bi bi-check-circle-fill"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card">
+    <div class="col-md-2">
+        <div class="card summary-card" onclick="filterStatus('Training')" style="cursor:pointer;">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="text-muted mb-1">Karyawan Resign</h6>
+                        <h6 class="text-muted mb-1">Training</h6>
+                        <h3 class="mb-0" style="color: #fd7e14;">{{ $totalTraining }}</h3>
+                    </div>
+                    <div style="font-size: 2rem; color: #fd7e14; opacity: 0.2;">
+                        <i class="bi bi-mortarboard-fill"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card summary-card" onclick="filterStatus('Resign')" style="cursor:pointer;">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-1">Resign</h6>
                         <h3 class="mb-0" style="color: #dc3545;">{{ $totalResign }}</h3>
                     </div>
-                    <div style="font-size: 2.5rem; color: #dc3545; opacity: 0.2;">
+                    <div style="font-size: 2rem; color: #dc3545; opacity: 0.2;">
                         <i class="bi bi-x-circle-fill"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card">
+    <div class="col-md-2">
+        <div class="card summary-card" onclick="filterStatus('Fraud')" style="cursor:pointer;">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="text-muted mb-1">Persentase Aktif</h6>
-                        <h3 class="mb-0">{{ $totalKaryawan > 0 ? round(($totalAktif / $totalKaryawan) * 100, 1) : 0 }}%</h3>
+                        <h6 class="text-muted mb-1">Fraud</h6>
+                        <h3 class="mb-0" style="color: #6f0000;">{{ $totalFraud }}</h3>
                     </div>
-                    <div style="font-size: 2.5rem; color: #0d6efd; opacity: 0.2;">
-                        <i class="bi bi-percent"></i>
+                    <div style="font-size: 2rem; color: #6f0000; opacity: 0.2;">
+                        <i class="bi bi-shield-exclamation"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card summary-card" onclick="filterStatus('Cancel')" style="cursor:pointer;">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-1">Cancel</h6>
+                        <h3 class="mb-0" style="color: #6c757d;">{{ $totalCancel }}</h3>
+                    </div>
+                    <div style="font-size: 2rem; color: #6c757d; opacity: 0.2;">
+                        <i class="bi bi-slash-circle-fill"></i>
                     </div>
                 </div>
             </div>
@@ -156,9 +186,18 @@
     <div class="card-header bg-light border-bottom">
         <div class="row align-items-center">
             <div class="col">
-                <h5 class="mb-0">Daftar Karyawan 
-                    <span class="badge bg-{{ $statusFilter == 'Aktif' ? 'success' : 'danger' }}">
-                        {{ $statusFilter }}
+                <h5 class="mb-0">Daftar Karyawan
+                    @php
+                    $badgeMap = [
+                        'Aktif'    => 'success',
+                        'Training' => 'warning',
+                        'Resign'   => 'danger',
+                        'Fraud'    => 'dark',
+                        'Cancel'   => 'secondary',
+                    ];
+                    @endphp
+                    <span class="badge bg-{{ $badgeMap[$statusFilter] ?? 'primary' }}">
+                        {{ $statusFilter ?: 'Semua' }}
                     </span>
                 </h5>
             </div>
@@ -197,8 +236,12 @@
             </div>
             <div class="col-md-2">
                 <select name="status" class="form-control">
-                    <option value="Aktif" {{ $statusFilter == 'Aktif' ? 'selected' : '' }}>Aktif</option>
-                    <option value="Resign" {{ $statusFilter == 'Resign' ? 'selected' : '' }}>Resign</option>
+                    <option value="" {{ $statusFilter == '' ? 'selected' : '' }}>Semua Status</option>
+                    <option value="Aktif"    {{ $statusFilter == 'Aktif'    ? 'selected' : '' }}>Aktif</option>
+                    <option value="Training" {{ $statusFilter == 'Training' ? 'selected' : '' }}>Training</option>
+                    <option value="Resign"   {{ $statusFilter == 'Resign'   ? 'selected' : '' }}>Resign</option>
+                    <option value="Fraud"    {{ $statusFilter == 'Fraud'    ? 'selected' : '' }}>Fraud</option>
+                    <option value="Cancel"   {{ $statusFilter == 'Cancel'   ? 'selected' : '' }}>Cancel</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -234,9 +277,12 @@
                         <td>
                             @php
                             $statusClass = match($emp->status ?? 'Aktif') {
-                            'Aktif' => 'bg-success',
-                            'Resign' => 'bg-danger',
-                            default => 'bg-secondary'
+                                'Aktif'    => 'bg-success',
+                                'Training' => 'bg-warning text-dark',
+                                'Resign'   => 'bg-danger',
+                                'Fraud'    => 'bg-dark',
+                                'Cancel'   => 'bg-secondary',
+                                default    => 'bg-secondary',
                             };
                             @endphp
                             <span class="badge {{ $statusClass }}">{{ $emp->status ?? 'Aktif' }}</span>
@@ -252,7 +298,7 @@
         </div>
         @else
         <div class="alert alert-info">
-            <i class="bi bi-info-circle"></i> Tidak ada data karyawan {{ strtolower($statusFilter) }}.
+            <i class="bi bi-info-circle"></i> Tidak ada data karyawan{{ $statusFilter ? ' ' . strtolower($statusFilter) : '' }}.
         </div>
         @endif
     </div>
@@ -271,5 +317,23 @@
         border: 1px solid #e9ecef;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
+
+    .summary-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+        transform: translateY(-2px);
+        transition: all 0.2s ease;
+    }
 </style>
+
+<script>
+function filterStatus(status) {
+    const url = new URL(window.location.href);
+    if (status === '') {
+        url.searchParams.delete('status');
+    } else {
+        url.searchParams.set('status', status);
+    }
+    window.location.href = url.toString();
+}
+</script>
 @endsection

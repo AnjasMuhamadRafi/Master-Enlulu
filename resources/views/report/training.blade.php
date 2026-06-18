@@ -1,16 +1,16 @@
 @extends('layouts.app')
 
-@section('title', 'Report Karyawan Resign')
-@section('page-title', 'Report Karyawan Resign')
+@section('title', 'Report Karyawan Training')
+@section('page-title', 'Report Karyawan Training')
 
 @section('content')
 <div class="page-header mb-4">
     <div class="row align-items-center">
         <div class="col">
-            <h1 class="h3 text-dark"><i class="bi bi-bar-chart" style="color: #FF6B35; margin-right: 8px;"></i> Report Karyawan Resign</h1>
+            <h1 class="h3 text-dark"><i class="bi bi-mortarboard" style="color: #fd7e14; margin-right: 8px;"></i> Report Karyawan Training</h1>
         </div>
         <div class="col-auto">
-            <a href="{{ route('employee.export', ['status' => 'Resign']) }}" class="btn btn-success">
+            <a href="{{ route('employee.export', ['status' => 'Training']) }}" class="btn btn-success">
                 <i class="bi bi-download"></i> Export
             </a>
         </div>
@@ -105,29 +105,15 @@
             <tbody>
                 @foreach($employees as $employee)
                     <tr>
+                        <td><small><strong>{{ $employee->nik }}</strong></small></td>
+                        <td><small>{{ $employee->nama_lengkap }}</small></td>
+                        <td><small>{{ $employee->posisi ?? '-' }}</small></td>
+                        <td><small>{{ $employee->penempatan ?? '-' }}</small></td>
+                        <td><small>{{ $employee->no_rekening ?? '-' }}</small></td>
+                        <td><small>{{ $employee->nama_bank ?? '-' }}</small></td>
+                        <td><small>{{ $employee->nama_di_rekening ?? '-' }}</small></td>
                         <td>
-                            <small><strong>{{ $employee->nik }}</strong></small>
-                        </td>
-                        <td>
-                            <small>{{ $employee->nama_lengkap }}</small>
-                        </td>
-                        <td>
-                            <small>{{ $employee->posisi ?? '-' }}</small>
-                        </td>
-                        <td>
-                            <small>{{ $employee->penempatan ?? '-' }}</small>
-                        </td>
-                        <td>
-                            <small>{{ $employee->no_rekening ?? '-' }}</small>
-                        </td>
-                        <td>
-                            <small>{{ $employee->nama_bank ?? '-' }}</small>
-                        </td>
-                        <td>
-                            <small>{{ $employee->nama_di_rekening ?? '-' }}</small>
-                        </td>
-                        <td>
-                            <span class="badge bg-danger">{{ $employee->status ?? 'Resign' }}</span>
+                            <span class="badge bg-warning text-dark">{{ $employee->status ?? 'Training' }}</span>
                         </td>
                     </tr>
                 @endforeach
@@ -139,7 +125,7 @@
 {{ $employees->links() }}
 @else
     <div class="alert alert-info" role="alert">
-        <i class="bi bi-info-circle"></i> Tidak ada data karyawan resign yang ditemukan.
+        <i class="bi bi-info-circle"></i> Tidak ada data karyawan training yang ditemukan.
     </div>
 @endif
 

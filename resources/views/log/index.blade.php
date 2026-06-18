@@ -358,49 +358,7 @@
         </div>
     </div>
 
-    <!-- Pagination -->
-    @if($logs->hasPages())
-    <div class="d-flex justify-content-center mt-4 mb-4">
-        <nav aria-label="Page navigation">
-            <ul class="pagination pagination-sm mb-0 flex-wrap">
-                {{-- Previous Page Link --}}
-                @if ($logs->onFirstPage())
-                    <li class="page-item disabled">
-                        <span class="page-link">← Previous</span>
-                    </li>
-                @else
-                    <li class="page-item">
-                        <a class="page-link" href="{{ $logs->previousPageUrl() }}&search={{ request('search') }}&action={{ request('action') }}&user_id={{ request('user_id') }}&date_from={{ request('date_from') }}&date_to={{ request('date_to') }}">← Previous</a>
-                    </li>
-                @endif
-
-                {{-- Pagination Elements --}}
-                @foreach ($logs->getUrlRange(1, $logs->lastPage()) as $page => $url)
-                    @if ($page == $logs->currentPage())
-                        <li class="page-item active">
-                            <span class="page-link">{{ $page }}</span>
-                        </li>
-                    @else
-                        <li class="page-item">
-                            <a class="page-link" href="{{ $url }}&search={{ request('search') }}&action={{ request('action') }}&user_id={{ request('user_id') }}&date_from={{ request('date_from') }}&date_to={{ request('date_to') }}">{{ $page }}</a>
-                        </li>
-                    @endif
-                @endforeach
-
-                {{-- Next Page Link --}}
-                @if ($logs->hasMorePages())
-                    <li class="page-item">
-                        <a class="page-link" href="{{ $logs->nextPageUrl() }}&search={{ request('search') }}&action={{ request('action') }}&user_id={{ request('user_id') }}&date_from={{ request('date_from') }}&date_to={{ request('date_to') }}">Next →</a>
-                    </li>
-                @else
-                    <li class="page-item disabled">
-                        <span class="page-link">Next →</span>
-                    </li>
-                @endif
-            </ul>
-        </nav>
-    </div>
-    @endif
+    {{ $logs->links() }}
 @else
     <div class="alert alert-info" role="alert">
         <i class="bi bi-info-circle"></i> Tidak ada activity log yang tersedia. Mulai lakukan aksi untuk mencatat aktivitas.

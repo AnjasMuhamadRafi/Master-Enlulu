@@ -820,6 +820,92 @@
             }
         }
         
+        /* ===== Enlulu Pagination (global) ===== */
+        .enlulu-pagination {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-top: 24px;
+            margin-bottom: 8px;
+        }
+
+        .enlulu-pagination__info {
+            font-size: 13px;
+            color: #6c757d;
+        }
+
+        .enlulu-pagination__list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .enlulu-pagination__link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 36px;
+            height: 36px;
+            padding: 0 8px;
+            font-size: 13px;
+            font-weight: 500;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            background: #fff;
+            color: #495057;
+            text-decoration: none;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+            cursor: pointer;
+            white-space: nowrap;
+            line-height: 1;
+        }
+
+        a.enlulu-pagination__link:hover {
+            background: #fff5f0;
+            border-color: #FF6B35;
+            color: #FF6B35;
+        }
+
+        .enlulu-pagination__item.active .enlulu-pagination__link {
+            background: #FF6B35;
+            border-color: #FF6B35;
+            color: #fff;
+            font-weight: 700;
+            cursor: default;
+        }
+
+        .enlulu-pagination__item.disabled .enlulu-pagination__link {
+            background: #f8f9fa;
+            border-color: #dee2e6;
+            color: #adb5bd;
+            cursor: not-allowed;
+        }
+
+        .enlulu-pagination__ellipsis {
+            border: none;
+            background: transparent;
+            color: #adb5bd;
+            cursor: default;
+            min-width: 28px;
+        }
+
+        @media (max-width: 576px) {
+            .enlulu-pagination__link {
+                min-width: 32px;
+                height: 32px;
+                font-size: 12px;
+                padding: 0 6px;
+                border-radius: 5px;
+            }
+        }
+        /* ===== End Pagination ===== */
+
         /* Scrollbar custom */
         .sidebar-content::-webkit-scrollbar {
             width: 6px;
