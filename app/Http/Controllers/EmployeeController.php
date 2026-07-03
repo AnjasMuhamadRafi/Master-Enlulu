@@ -26,7 +26,7 @@ class EmployeeController extends Controller
         
         // Access control: Filter by user role
         /** @var User|null $user */
-        $user = auth()->user();
+        $user = $this->currentUser();
         if ($user && $user->isAdminPic()) {
             // ADMIN/PIC hanya bisa lihat posisi yang di-handle
             $adminPicDepartments = config('positions.admin_pic_departments', []);
@@ -71,6 +71,13 @@ class EmployeeController extends Controller
         $posisi = Employee::distinct()->pluck('posisi')->filter();
         
         return view('employee.index', compact('employees', 'penempatan', 'posisi'));
+    }
+
+    private function currentUser(): ?User
+    {
+        $user = auth()->user();
+
+        return $user instanceof User ? $user : null;
     }
 
     /**
@@ -212,7 +219,7 @@ class EmployeeController extends Controller
     {
         // Access control: Check if user can view this employee
         /** @var User|null $user */
-        $user = auth()->user();
+        $user = $this->currentUser();
         if ($user && $user->isAdminPic()) {
             if (!$user->canAccessPosition($employee->posisi)) {
                 abort(403, 'Anda tidak memiliki akses ke data karyawan ini.');
@@ -229,7 +236,7 @@ class EmployeeController extends Controller
     {
         // Access control: Check if user can edit this employee
         /** @var User|null $user */
-        $user = auth()->user();
+        $user = $this->currentUser();
         if ($user && $user->isAdminPic()) {
             if (!$user->canAccessPosition($employee->posisi)) {
                 abort(403, 'Anda tidak memiliki akses untuk mengedit data karyawan ini.');
@@ -246,7 +253,7 @@ class EmployeeController extends Controller
     {
         // Access control: Check if user can update this employee
         /** @var User|null $user */
-        $user = auth()->user();
+        $user = $this->currentUser();
         if ($user && $user->isAdminPic()) {
             if (!$user->canAccessPosition($employee->posisi)) {
                 abort(403, 'Anda tidak memiliki akses untuk mengubah data karyawan ini.');
@@ -318,7 +325,7 @@ class EmployeeController extends Controller
     {
         // Access control: Check if user can delete this employee
         /** @var User|null $user */
-        $user = auth()->user();
+        $user = $this->currentUser();
         if ($user && $user->isAdminPic()) {
             if (!$user->canAccessPosition($employee->posisi)) {
                 abort(403, 'Anda tidak memiliki akses untuk menghapus data karyawan ini.');
@@ -457,14 +464,14 @@ class EmployeeController extends Controller
         $this->renderSpreadsheet($headers, [$sampleRow]);
     }
 
-    private function renderSpreadsheet(array $headers, array $rows): void
+    private function renderSpreadsheet(array $headers, array $rows, ?array $columnWidths = null, string $sheetTitle = 'Sheet1'): void
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Sheet1');
+        $sheet->setTitle($sheetTitle);
 
         // Lebar kolom sesuai urutan exportColumns() + kolom NO di depan
-        $columnWidths = [
+        $columnWidths ??= [
             6,   // NO
             18,  // NIK KTP
             22,  // NAMA KTP
@@ -1389,11 +1396,16 @@ class EmployeeController extends Controller
                 $cells = new \DOMNodeList();
             }
             
-            // Read ALL columns (not just 7)
+            // Read ALL columns based on cell reference so empty cells do not shift mapping.
             for ($i = 0; $i < $cells->length; $i++) {
                 $value = '';
                 $cell = $cells->item($i);
                 if ($cell instanceof \DOMElement) {
+                    $cellReference = $cell->getAttribute('r');
+                    $columnLetters = preg_replace('/\d+/', '', $cellReference);
+                    $columnIndex = $columnLetters
+                        ? Coordinate::columnIndexFromString($columnLetters) - 1
+                        : $i;
                     $type = $cell->getAttribute('t');
                     $v = $cell->getElementsByTagName('v');
                     
@@ -1406,9 +1418,20 @@ class EmployeeController extends Controller
                         } else {
                             $value = $cellValue;
                         }
+                    } elseif ($type === 'inlineStr') {
+                        $inlineStrings = $cell->getElementsByTagName('t');
+                        if ($inlineStrings->length > 0) {
+                            $value = $inlineStrings->item(0)->nodeValue;
+                        }
                     }
+                    $row[$columnIndex] = $value;
                 }
-                $row[] = $value;
+            }
+
+            if (!empty($row)) {
+                ksort($row);
+                $maxColumn = max(array_keys($row));
+                $row = array_replace(array_fill(0, $maxColumn + 1, ''), $row);
             }
             
             // Include ALL rows (header + data) if not empty
@@ -1426,6 +1449,18 @@ class EmployeeController extends Controller
     public function export(Request $request)
     {
         $query = Employee::query();
+
+        // Access control: samakan dengan daftar karyawan.
+        /** @var User|null $user */
+        $user = $this->currentUser();
+        if ($user && $user->isAdminPic()) {
+            $adminPicDepartments = config('positions.admin_pic_departments', []);
+            $managedPositions = $adminPicDepartments[$user->handled_position] ?? [];
+
+            if (!empty($managedPositions)) {
+                $query->whereIn('posisi', $managedPositions);
+            }
+        }
         
         // Filter berdasarkan status jika ada
         if ($request->filled('status')) {
@@ -1435,9 +1470,13 @@ class EmployeeController extends Controller
         // Apply filters yang sama seperti di index
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where('nik', 'like', "%$search%")
-                  ->orWhere('nama_lengkap', 'like', "%$search%")
-                  ->orWhere('posisi', 'like', "%$search%");
+            $query->where(function ($q) use ($search) {
+                $q->where('nik', 'like', "%{$search}%")
+                    ->orWhere('nik_ktp', 'like', "%{$search}%")
+                    ->orWhere('nama_ktp', 'like', "%{$search}%")
+                    ->orWhere('nama_lengkap', 'like', "%{$search}%")
+                    ->orWhere('posisi', 'like', "%{$search}%");
+            });
         }
         
         if ($request->filled('penempatan')) {
@@ -1447,7 +1486,7 @@ class EmployeeController extends Controller
         if ($request->filled('posisi')) {
             $query->where('posisi', 'like', "%{$request->posisi}%");
         }
-        
+
         $employees = $query->orderBy('nik')->get();
         $columns = $this->exportColumns();
         $headers = array_merge(['NO'], array_map(fn ($c) => $c[0], $columns));

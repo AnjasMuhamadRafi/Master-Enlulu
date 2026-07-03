@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingsUserController;
+use App\Http\Controllers\BpuTkController;
 use App\Http\Controllers\LogController;
 
 /*
@@ -45,6 +46,16 @@ Route::middleware('auth')->group(function () {
         Route::get('/import', [EmployeeController::class, 'showImportForm'])->name('import');
         Route::post('/import-validate', [EmployeeController::class, 'importValidate'])->name('import-validate');
         Route::post('/import-process', [EmployeeController::class, 'import'])->name('import-process');
+        Route::redirect('/bpjs', '/employee/bpu-tk')->name('bpjs');
+        // BPU TK (standalone, terpisah dari master)
+        Route::get('/bpu-tk/template', [BpuTkController::class, 'downloadTemplate'])->name('bpu-tk.template');
+        Route::post('/bpu-tk/import', [BpuTkController::class, 'import'])->name('bpu-tk.import');
+        Route::get('/bpu-tk/export', [BpuTkController::class, 'export'])->name('bpu-tk.export');
+        Route::get('/bpu-tk', [BpuTkController::class, 'index'])->name('bpu-tk');
+        Route::post('/bpu-tk', [BpuTkController::class, 'store'])->name('bpu-tk.store');
+        Route::get('/bpu-tk/{bpuTk}/edit', [BpuTkController::class, 'edit'])->name('bpu-tk.edit');
+        Route::put('/bpu-tk/{bpuTk}', [BpuTkController::class, 'update'])->name('bpu-tk.update');
+        Route::delete('/bpu-tk/{bpuTk}', [BpuTkController::class, 'destroy'])->name('bpu-tk.destroy');
         Route::get('/export', [EmployeeController::class, 'export'])->name('export');
         Route::get('/report', [EmployeeController::class, 'report'])->name('report');
         
