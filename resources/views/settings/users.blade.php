@@ -13,7 +13,7 @@
 
 @if($errors->any())
 <div class="alert alert-danger alert-dismissible fade show" role="alert">
-    <strong>Gagal menambah user:</strong>
+    <strong>Gagal menyimpan user:</strong>
     <ul class="mb-0 mt-1 ps-3">
         @foreach($errors->all() as $error)
             <li>{{ $error }}</li>
@@ -59,8 +59,11 @@
                         </span>
                     </td>
                     <td>
-                        @if ($user->handled_position)
-                            <span class="badge bg-light text-dark">{{ $user->handled_position }}</span>
+                        @php $positions = $user->getManagedPositions(); @endphp
+                        @if(!empty($positions))
+                            @foreach($positions as $pos)
+                                <span class="badge bg-light text-dark me-1">{{ $pos }}</span>
+                            @endforeach
                         @else
                             <span class="text-muted">-</span>
                         @endif
@@ -81,7 +84,7 @@
                     </td>
                 </tr>
                 @endforeach
-                
+
                 @if(empty($users) || $users->count() === 0)
                 <tr>
                     <td colspan="7" class="text-center text-muted py-4">
@@ -126,14 +129,46 @@
                         @error('role')<span class="invalid-feedback d-block">{{ $message }}</span>@enderror
                     </div>
                     <div class="mb-3 position-field-create" @if(old('role') !== 'Admin') style="display: none;" @endif>
-                        <label class="form-label">Posisi Dikelola *</label>
-                        <select class="form-select @error('handled_position') is-invalid @enderror" name="handled_position" id="posisiCreate" {{ old('role') === 'Admin' ? 'required' : '' }}>
-                            <option value="">Pilih Posisi</option>
-                            <option value="SPRINTER" {{ old('handled_position') === 'SPRINTER' ? 'selected' : '' }}>SPRINTER</option>
-                            <option value="TRANSPORTER" {{ old('handled_position') === 'TRANSPORTER' ? 'selected' : '' }}>TRANSPORTER</option>
-                            <option value="WH" {{ old('handled_position') === 'WH' ? 'selected' : '' }}>WH</option>
-                        </select>
-                        @error('handled_position')<span class="invalid-feedback d-block">{{ $message }}</span>@enderror
+                        <label class="form-label">Posisi Dikelola</label>
+                        <div class="border rounded p-2">
+                            @php
+                                $createSelectedPositions = collect(old('handled_position', []))
+                                    ->map(fn($position) => trim(strtoupper(preg_replace('/^position:/i', '', (string) $position))))
+                                    ->filter()
+                                    ->values()
+                                    ->all();
+                                $createPositionChoices = collect($availablePositions ?? [])
+                                    ->merge($createSelectedPositions)
+                                    ->unique()
+                                    ->sort()
+                                    ->values();
+                            @endphp
+
+                            <div class="managed-position-list">
+                                @forelse($createPositionChoices as $position)
+                                    @php $positionId = md5($position); @endphp
+                                    <div class="form-check">
+                                        <input class="form-check-input position-checkbox-create" type="checkbox"
+                                               name="handled_position[]" value="{{ $position }}"
+                                               id="posisiCreate_{{ $positionId }}"
+                                               {{ in_array($position, $createSelectedPositions, true) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="posisiCreate_{{ $positionId }}">
+                                            {{ $position }}
+                                        </label>
+                                    </div>
+                                @empty
+                                    <div class="text-muted small">Belum ada posisi di master karyawan.</div>
+                                @endforelse
+                            </div>
+
+                            <div class="mt-2">
+                                <label class="form-label small mb-1">Posisi tambahan</label>
+                                <textarea class="form-control form-control-sm" name="handled_position_manual" rows="2" placeholder="Contoh: HELPER SORTIR">{{ old('handled_position_manual') }}</textarea>
+                                <div class="form-text">Pisahkan beberapa posisi dengan koma atau baris baru.</div>
+                            </div>
+                        </div>
+                        @error('handled_position')<span class="text-danger small d-block mt-1">{{ $message }}</span>@enderror
+                        @error('handled_position_manual')<span class="text-danger small d-block mt-1">{{ $message }}</span>@enderror
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Password *</label>
@@ -184,14 +219,44 @@
                         @error('role')<span class="invalid-feedback d-block">{{ $message }}</span>@enderror
                     </div>
                     <div class="mb-3 position-field-edit{{ $user->id }}" @if(old('role', $user->role) !== 'Admin') style="display: none;" @endif>
-                        <label class="form-label">Posisi Dikelola *</label>
-                        <select class="form-select @error('handled_position') is-invalid @enderror" name="handled_position" id="posisiEdit{{ $user->id }}" {{ old('role', $user->role) === 'Admin' ? 'required' : '' }}>
-                            <option value="">Pilih Posisi</option>
-                            <option value="SPRINTER" {{ old('handled_position', $user->handled_position) === 'SPRINTER' ? 'selected' : '' }}>SPRINTER</option>
-                            <option value="TRANSPORTER" {{ old('handled_position', $user->handled_position) === 'TRANSPORTER' ? 'selected' : '' }}>TRANSPORTER</option>
-                            <option value="WH" {{ old('handled_position', $user->handled_position) === 'WH' ? 'selected' : '' }}>WH</option>
-                        </select>
-                        @error('handled_position')<span class="invalid-feedback d-block">{{ $message }}</span>@enderror
+                        <label class="form-label">Posisi Dikelola</label>
+                        <div class="border rounded p-2">
+                            @php
+                                $currentPositions = is_array(old('handled_position'))
+                                    ? collect(old('handled_position'))->map(fn($position) => trim(strtoupper(preg_replace('/^position:/i', '', (string) $position))))->filter()->values()->all()
+                                    : $user->getManagedPositions();
+                                $editPositionChoices = collect($availablePositions ?? [])
+                                    ->merge($currentPositions)
+                                    ->unique()
+                                    ->sort()
+                                    ->values();
+                            @endphp
+
+                            <div class="managed-position-list">
+                                @forelse($editPositionChoices as $position)
+                                    @php $positionId = md5($user->id . $position); @endphp
+                                    <div class="form-check">
+                                        <input class="form-check-input position-checkbox-edit{{ $user->id }}" type="checkbox"
+                                               name="handled_position[]" value="{{ $position }}"
+                                               id="posisiEdit{{ $user->id }}_{{ $positionId }}"
+                                               {{ in_array($position, $currentPositions, true) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="posisiEdit{{ $user->id }}_{{ $positionId }}">
+                                            {{ $position }}
+                                        </label>
+                                    </div>
+                                @empty
+                                    <div class="text-muted small">Belum ada posisi di master karyawan.</div>
+                                @endforelse
+                            </div>
+
+                            <div class="mt-2">
+                                <label class="form-label small mb-1">Posisi tambahan</label>
+                                <textarea class="form-control form-control-sm" name="handled_position_manual" rows="2" placeholder="Contoh: HELPER SORTIR">{{ old('handled_position_manual') }}</textarea>
+                                <div class="form-text">Pisahkan beberapa posisi dengan koma atau baris baru.</div>
+                            </div>
+                        </div>
+                        @error('handled_position')<span class="text-danger small d-block mt-1">{{ $message }}</span>@enderror
+                        @error('handled_position_manual')<span class="text-danger small d-block mt-1">{{ $message }}</span>@enderror
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -204,33 +269,34 @@
 </div>
 @endforeach
 
+<style>
+    .managed-position-list {
+        max-height: 220px;
+        overflow-y: auto;
+    }
+</style>
+
 <script>
-    // Handle role change - show/hide posisi dikelola field
     document.querySelectorAll('.role-select').forEach(select => {
         const form = select.dataset.form;
         const userId = select.dataset.userId;
-        
-        select.addEventListener('change', function() {
-            let posisiContainer, posisiInput;
-            
+
+        select.addEventListener('change', function () {
+            let container, checkboxes;
+
             if (form === 'create') {
-                posisiContainer = document.querySelector('.position-field-create');
-                posisiInput = document.getElementById('posisiCreate');
+                container  = document.querySelector('.position-field-create');
+                checkboxes = document.querySelectorAll('.position-checkbox-create');
             } else {
-                // form is "edit{userId}"
-                posisiContainer = document.querySelector(`.position-field-edit${userId}`);
-                posisiInput = document.getElementById(`posisiEdit${userId}`);
+                container  = document.querySelector(`.position-field-edit${userId}`);
+                checkboxes = document.querySelectorAll(`.position-checkbox-edit${userId}`);
             }
-            
+
             if (this.value === 'Admin') {
-                // Show position field and make it required
-                posisiContainer.style.display = 'block';
-                posisiInput.setAttribute('required', 'required');
+                container.style.display = 'block';
             } else {
-                // Hide position field and remove required
-                posisiContainer.style.display = 'none';
-                posisiInput.removeAttribute('required');
-                posisiInput.value = ''; // Clear value
+                container.style.display = 'none';
+                checkboxes.forEach(cb => cb.checked = false);
             }
         });
     });

@@ -43,6 +43,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'handled_position' => 'array',
     ];
 
     /**
@@ -66,35 +67,59 @@ class User extends Authenticatable
     }
 
     /**
-     * Get posisi yang di-handle user
-     * 
-     * @return string|null
+     * Ambil semua posisi karyawan yang bisa diakses user ini.
+     * Menggabungkan semua department yang di-handle.
+     *
+     * @return array<string>
      */
-    public function getHandledPosition(): ?string
+    public function getManagedPositions(): array
     {
-        return $this->handled_position;
+        if ($this->isSuperAdmin()) {
+            return [];
+        }
+
+        $adminPicDepartments = config('positions.admin_pic_departments', []);
+
+        return collect((array) ($this->handled_position ?? []))
+            ->map(fn ($position) => trim((string) $position))
+            ->filter()
+            ->flatMap(function ($position) use ($adminPicDepartments) {
+                if (str_starts_with(strtolower($position), 'position:')) {
+                    return [trim(substr($position, strlen('position:')))];
+                }
+
+                return $adminPicDepartments[$position] ?? [$position];
+            })
+            ->map(fn ($position) => trim((string) $position))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**
-     * Check if user dapat akses data karyawan tertentu berdasarkan posisi
-     * 
-     * @param string $employeePosition Posisi karyawan yang ingin diakses
-     * @return bool
+     * Check if user dapat akses data karyawan tertentu berdasarkan posisi.
      */
-    public function canAccessPosition(string $employeePosition): bool
+    public function canAccessPosition(?string $employeePosition): bool
     {
-        // Super Admin bisa akses semua
         if ($this->isSuperAdmin()) {
             return true;
         }
 
-        // ADMIN/PIC hanya bisa akses sesuai posisi yang di-handle
-        if ($this->isAdminPic() && $this->handled_position) {
-            // Get list of positions handled by this ADMIN/PIC
-            $adminPicDepartments = config('positions.admin_pic_departments', []);
-            $managedPositions = $adminPicDepartments[$this->handled_position] ?? [];
-            
-            return in_array($employeePosition, $managedPositions);
+        $employeePosition = trim(strtoupper((string) $employeePosition));
+
+        if ($employeePosition === '') {
+            return false;
+        }
+
+        if ($this->isAdminPic()) {
+            return in_array(
+                $employeePosition,
+                collect($this->getManagedPositions())
+                    ->map(fn ($position) => trim(strtoupper((string) $position)))
+                    ->all(),
+                true
+            );
         }
 
         return false;

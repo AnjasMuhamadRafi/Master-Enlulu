@@ -22,15 +22,9 @@ class DashboardController extends Controller
         
         // Apply access control filtering if user is Admin/PIC
         if ($user && $user->isAdminPic()) {
-            $adminPicDepartments = config('positions.admin_pic_departments', []);
-            $managedPositions = $adminPicDepartments[$user->handled_position] ?? [];
-            
-            if (!empty($managedPositions)) {
-                // Filter statistics query
-                $query->whereIn('posisi', $managedPositions);
-                // Filter admin pic query
-                $adminPicQuery->whereIn('posisi', $managedPositions);
-            }
+            $managedPositions = $user->getManagedPositions();
+            $query->whereIn('posisi', $managedPositions);
+            $adminPicQuery->whereIn('posisi', $managedPositions);
         }
         
         // Get statistics (filtered by role if Admin/PIC)
@@ -41,8 +35,7 @@ class DashboardController extends Controller
         $user_count = User::count();
         
         // Get ADMIN/PIC employees (filtered by role if user is Admin/PIC)
-        $adminPicRoles = config('positions.admin_pic_roles', []);
-        $adminPicEmployees = $adminPicQuery->whereIn('posisi', $adminPicRoles)
+        $adminPicEmployees = $adminPicQuery->where('posisi', 'like', 'ADMIN/PIC-%')
             ->where('status', 'Aktif')
             ->get();
         

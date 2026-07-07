@@ -77,6 +77,8 @@ class BpuTkController extends Controller
         $records = $query->orderBy('nama_lengkap')
             ->paginate($perPage)
             ->appends($request->query());
+        $positionOptions = $this->positionOptions();
+        $locationOptions = $this->locationOptions();
 
         // Tandai mana yang ada di master (batch lookup agar tidak N+1)
         $masterNiks = Employee::whereIn('nik_ktp', $records->pluck('nomor_identitas'))
@@ -87,7 +89,7 @@ class BpuTkController extends Controller
             ->flip()
             ->toArray();
 
-        return view('employee.bpu-tk', compact('records', 'summary', 'masterNiks'));
+        return view('employee.bpu-tk', compact('records', 'summary', 'masterNiks', 'positionOptions', 'locationOptions'));
     }
 
     // -------------------------------------------------------------------------
@@ -117,12 +119,18 @@ class BpuTkController extends Controller
 
         $validated['kode_paket']    = $validated['kode_paket'] ?: 'T';
         $validated['bulan_iuran']   = $validated['bulan_iuran'] ?: 1;
+        $validated = $this->normalizeBpuData($validated);
+        $requestedJob = $validated['jenis_pekerjaan_1'] ?? null;
+        $validated = $this->fillFromMasterEmployee($validated);
+        $syncNotice = $this->jobSyncNotice($requestedJob, $validated['jenis_pekerjaan_1'] ?? null);
 
         $record = BpuTk::create($validated);
 
         ActivityLog::log('create', 'BpuTk', $record->nomor_identitas, 'Tambah data BPU TK: ' . $record->nama_lengkap, [], $validated);
 
-        return redirect()->route('employee.bpu-tk')->with('success', 'Data BPU TK berhasil ditambahkan.');
+        $response = redirect()->route('employee.bpu-tk')->with('success', 'Data BPU TK berhasil ditambahkan.');
+
+        return $syncNotice ? $response->with('warning', $syncNotice) : $response;
     }
 
     // -------------------------------------------------------------------------
@@ -131,7 +139,10 @@ class BpuTkController extends Controller
 
     public function edit(BpuTk $bpuTk)
     {
-        return view('employee.bpu-tk-edit', compact('bpuTk'));
+        $positionOptions = $this->positionOptions();
+        $locationOptions = $this->locationOptions();
+
+        return view('employee.bpu-tk-edit', compact('bpuTk', 'positionOptions', 'locationOptions'));
     }
 
     public function update(Request $request, BpuTk $bpuTk)
@@ -152,13 +163,19 @@ class BpuTkController extends Controller
 
         $validated['kode_paket']  = $validated['kode_paket'] ?: 'T';
         $validated['bulan_iuran'] = $validated['bulan_iuran'] ?: 1;
+        $validated = $this->normalizeBpuData($validated);
+        $requestedJob = $validated['jenis_pekerjaan_1'] ?? null;
+        $validated = $this->fillFromMasterEmployee($validated);
+        $syncNotice = $this->jobSyncNotice($requestedJob, $validated['jenis_pekerjaan_1'] ?? null);
 
         $old = $bpuTk->getAttributes();
         $bpuTk->update($validated);
 
         ActivityLog::log('update', 'BpuTk', $bpuTk->nomor_identitas, 'Update data BPU TK: ' . $bpuTk->nama_lengkap, $old, $validated);
 
-        return redirect()->route('employee.bpu-tk')->with('success', 'Data BPU TK berhasil diperbarui.');
+        $response = redirect()->route('employee.bpu-tk')->with('success', 'Data BPU TK berhasil diperbarui.');
+
+        return $syncNotice ? $response->with('warning', $syncNotice) : $response;
     }
 
     // -------------------------------------------------------------------------
@@ -245,6 +262,8 @@ class BpuTkController extends Controller
                 'kode_paket'        => $this->cell($row, $columnMap['kode_paket']) ?: 'T',
                 'bulan_iuran'       => $this->parseInteger($this->cell($row, $columnMap['bulan_iuran'])) ?: 1,
             ];
+            $data = $this->normalizeBpuData($data);
+            $data = $this->fillFromMasterEmployee($data);
 
             $existing = BpuTk::where('nomor_identitas', $nik)->first();
 
@@ -316,7 +335,7 @@ class BpuTkController extends Controller
         $headers  = ['NOMOR_IDENTITAS', 'NAMA_LENGKAP', 'TGL_LAHIR', 'HANDPHONE', 'EMAIL',
                      'JENIS_PEKERJAAN_1', 'JENIS_PEKERJAAN_2', 'LOKASI_PEKERJAAN', 'UPAH', 'KODE_PAKET', 'BULAN_IURAN'];
         $sample   = ['1234567890123456', 'JOHN DOE', '20-01-1990', '081234567890', 'john@email.com',
-                     'Kurir', '', 'Jakarta Selatan', '2000000', 'T', '1'];
+                     'KURIR MOTOR', '', 'Jakarta Selatan', '2000000', 'T', '1'];
         $widths   = [22, 28, 14, 16, 28, 22, 22, 22, 14, 12, 12];
         $filename = 'Template_BPU_TK.xlsx';
 
@@ -402,6 +421,106 @@ class BpuTkController extends Controller
         ];
     }
 
+    private function positionOptions(): array
+    {
+        return collect(config('positions.operational_positions', []))
+            ->merge(collect(config('positions.admin_pic_departments', []))->flatten())
+            ->merge(Employee::query()->whereNotNull('posisi')->distinct()->pluck('posisi'))
+            ->merge(BpuTk::query()->whereNotNull('jenis_pekerjaan_1')->distinct()->pluck('jenis_pekerjaan_1'))
+            ->merge(BpuTk::query()->whereNotNull('jenis_pekerjaan_2')->distinct()->pluck('jenis_pekerjaan_2'))
+            ->map(fn ($position) => $this->normalizePosition($position))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    private function locationOptions(): array
+    {
+        return collect(Employee::query()->whereNotNull('penempatan')->distinct()->pluck('penempatan'))
+            ->merge(BpuTk::query()->whereNotNull('lokasi_pekerjaan')->distinct()->pluck('lokasi_pekerjaan'))
+            ->map(fn ($location) => trim((string) $location))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    private function normalizeBpuData(array $data): array
+    {
+        foreach (['jenis_pekerjaan_1', 'jenis_pekerjaan_2'] as $field) {
+            if (array_key_exists($field, $data)) {
+                $data[$field] = $this->normalizePosition($data[$field]) ?: null;
+            }
+        }
+
+        if (array_key_exists('lokasi_pekerjaan', $data)) {
+            $data['lokasi_pekerjaan'] = trim((string) ($data['lokasi_pekerjaan'] ?? '')) ?: null;
+        }
+
+        return $data;
+    }
+
+    private function fillFromMasterEmployee(array $data): array
+    {
+        $nik = $data['nomor_identitas'] ?? null;
+        if (!$nik) {
+            return $data;
+        }
+
+        $employee = Employee::where('nik', $nik)
+            ->orWhere('nik_ktp', $nik)
+            ->first();
+
+        if (!$employee) {
+            return $data;
+        }
+
+        $defaults = [
+            'nama_lengkap' => $employee->nama_lengkap ?: $employee->nama_ktp,
+            'tanggal_lahir' => $employee->tanggal_lahir?->format('Y-m-d'),
+            'handphone' => $employee->no_hp,
+            'email' => $employee->email,
+            'jenis_pekerjaan_1' => $this->normalizePosition($employee->posisi),
+            'lokasi_pekerjaan' => $employee->penempatan,
+        ];
+
+        foreach ($defaults as $field => $value) {
+            if (($data[$field] ?? null) === null || $data[$field] === '') {
+                $data[$field] = $value ?: null;
+            }
+        }
+
+        if (!empty($employee->posisi)) {
+            $data['jenis_pekerjaan_1'] = $this->normalizePosition($employee->posisi);
+        }
+
+        return $data;
+    }
+
+    private function normalizePosition(?string $position): string
+    {
+        return trim(strtoupper((string) $position));
+    }
+
+    private function jobSyncNotice(?string $requestedJob, ?string $finalJob): ?string
+    {
+        $requestedJob = $this->normalizePosition($requestedJob);
+        $finalJob = $this->normalizePosition($finalJob);
+
+        if ($finalJob === '' || $requestedJob === $finalJob) {
+            return null;
+        }
+
+        if ($requestedJob === '') {
+            return 'JENIS_PEKERJAAN_1 otomatis diisi dari posisi master: ' . $finalJob . '.';
+        }
+
+        return 'JENIS_PEKERJAAN_1 disesuaikan dengan posisi master: ' . $finalJob . '.';
+    }
+
     private function detectColumnMap(array $headers): ?array
     {
         $aliases = [
@@ -410,9 +529,9 @@ class BpuTkController extends Controller
             'tgl_lahir'          => ['TGL_LAHIR', 'TGL LAHIR', 'TANGGAL LAHIR', 'TANGGAL_LAHIR'],
             'handphone'          => ['HANDPHONE', 'NO HP', 'HP', 'NO_HP'],
             'email'              => ['EMAIL', 'E-MAIL'],
-            'jenis_pekerjaan_1'  => ['JENIS_PEKERJAAN_1', 'JENIS PEKERJAAN 1'],
+            'jenis_pekerjaan_1'  => ['JENIS_PEKERJAAN_1', 'JENIS PEKERJAAN 1', 'POSISI', 'JABATAN', 'POSISI KERJA'],
             'jenis_pekerjaan_2'  => ['JENIS_PEKERJAAN_2', 'JENIS PEKERJAAN 2'],
-            'lokasi_pekerjaan'   => ['LOKASI_PEKERJAAN', 'LOKASI PEKERJAAN'],
+            'lokasi_pekerjaan'   => ['LOKASI_PEKERJAAN', 'LOKASI PEKERJAAN', 'PENEMPATAN', 'LOKASI KERJA'],
             'upah'               => ['UPAH'],
             'kode_paket'         => ['KODE_PAKET', 'KODE PAKET'],
             'bulan_iuran'        => ['BULAN_IURAN', 'BULAN IURAN'],
@@ -605,7 +724,7 @@ class BpuTkController extends Controller
         // Header row
         $col = 1;
         foreach ($headers as $header) {
-            $cell = $sheet->getCellByColumnAndRow($col, 1);
+            $cell = $sheet->getCell(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . '1');
             $cell->setValue($header);
             $cell->getStyle()->getFont()->setBold(true);
             $cell->getStyle()->getFill()
@@ -619,7 +738,7 @@ class BpuTkController extends Controller
         foreach ($rows as $row) {
             $col = 1;
             foreach ($row as $value) {
-                $c = $sheet->getCellByColumnAndRow($col, $rowIndex);
+                $c = $sheet->getCell(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $rowIndex);
                 if ($col === 1) {
                     $c->setValueExplicit((string) $value, DataType::TYPE_STRING);
                 } else {

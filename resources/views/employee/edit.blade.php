@@ -264,19 +264,20 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Jabatan</label>
-                            <select class="form-select @error('posisi') is-invalid @enderror" name="posisi">
-                                <option value="">-- Pilih Posisi --</option>
-                                <optgroup label="ADMIN/PIC Roles">
-                                    @foreach (config('positions.admin_pic_roles', []) as $role)
-                                        <option value="{{ $role }}" {{ old('posisi', $employee->posisi) == $role ? 'selected' : '' }}>{{ $role }}</option>
-                                    @endforeach
-                                </optgroup>
-                                <optgroup label="Posisi Operasional">
-                                    @foreach (config('positions.operational_positions', []) as $pos)
-                                        <option value="{{ $pos }}" {{ old('posisi', $employee->posisi) == $pos ? 'selected' : '' }}>{{ $pos }}</option>
-                                    @endforeach
-                                </optgroup>
-                            </select>
+                            <input type="text"
+                                   class="form-control @error('posisi') is-invalid @enderror"
+                                   name="posisi"
+                                   value="{{ old('posisi', $employee->posisi) }}"
+                                   list="posisi-options"
+                                   placeholder="Pilih atau ketik posisi">
+                            <datalist id="posisi-options">
+                                @foreach ($adminPicRoles ?? config('positions.admin_pic_roles', []) as $role)
+                                    <option value="{{ $role }}"></option>
+                                @endforeach
+                                @foreach ($operationalPositions ?? config('positions.operational_positions', []) as $pos)
+                                    <option value="{{ $pos }}"></option>
+                                @endforeach
+                            </datalist>
                             @error('posisi')<span class="invalid-feedback d-block">{{ $message }}</span>@enderror
                         </div>
                         <div class="col-md-6">

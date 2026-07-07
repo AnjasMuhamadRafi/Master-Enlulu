@@ -28,22 +28,19 @@ class EmployeeController extends Controller
         /** @var User|null $user */
         $user = $this->currentUser();
         if ($user && $user->isAdminPic()) {
-            // ADMIN/PIC hanya bisa lihat posisi yang di-handle
-            $adminPicDepartments = config('positions.admin_pic_departments', []);
-            $managedPositions = $adminPicDepartments[$user->handled_position] ?? [];
-            
-            if (!empty($managedPositions)) {
-                $query->whereIn('posisi', $managedPositions);
-            }
+            $managedPositions = $user->getManagedPositions();
+            $query->whereIn('posisi', $managedPositions);
         }
         // Super Admin dan role lain bisa lihat semua
         
         // Search functionality
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where('nik', 'like', "%$search%")
+            $query->where(function ($q) use ($search) {
+                $q->where('nik', 'like', "%$search%")
                   ->orWhere('nama_lengkap', 'like', "%$search%")
                   ->orWhere('posisi', 'like', "%$search%");
+            });
         }
         
         // Filter by penempatan (using like for partial match)
@@ -85,7 +82,54 @@ class EmployeeController extends Controller
      */
     public function create()
     {
-        return view('employee.create');
+        $adminPicRoles = $this->adminPicRoleOptions();
+        $operationalPositions = $this->operationalPositionOptions();
+
+        return view('employee.create', compact('adminPicRoles', 'operationalPositions'));
+    }
+
+    private function adminPicRoleOptions(): array
+    {
+        return collect(config('positions.admin_pic_roles', []))
+            ->merge(
+                Employee::query()
+                    ->whereNotNull('posisi')
+                    ->where('posisi', 'like', 'ADMIN/PIC-%')
+                    ->distinct()
+                    ->pluck('posisi')
+            )
+            ->map(fn ($position) => $this->normalizePosition($position))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    private function operationalPositionOptions(): array
+    {
+        return collect(config('positions.operational_positions', []))
+            ->merge(
+                collect(config('positions.admin_pic_departments', []))
+                    ->flatten()
+            )
+            ->merge(
+                Employee::query()
+                    ->whereNotNull('posisi')
+                    ->distinct()
+                    ->pluck('posisi')
+            )
+            ->map(fn ($position) => $this->normalizePosition($position))
+            ->filter(fn ($position) => $position !== '' && !str_starts_with($position, 'ADMIN/PIC-'))
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    private function normalizePosition(?string $position): string
+    {
+        return trim(strtoupper((string) $position));
     }
 
     /**
@@ -182,6 +226,7 @@ class EmployeeController extends Controller
         ], $this->masterDataRules());
 
         $validated = $request->validate($rules, $this->validationMessages());
+        $validated['posisi'] = $this->normalizePosition($validated['posisi'] ?? '') ?: null;
 
         // Auto-fill nik_ktp dan nama_lengkap with nik and nama_ktp respectively
         $validated['nik_ktp'] = $validated['nik'];
@@ -243,7 +288,10 @@ class EmployeeController extends Controller
             }
         }
         
-        return view('employee.edit', compact('employee'));
+        $adminPicRoles = $this->adminPicRoleOptions();
+        $operationalPositions = $this->operationalPositionOptions();
+
+        return view('employee.edit', compact('employee', 'adminPicRoles', 'operationalPositions'));
     }
 
     /**
@@ -266,6 +314,7 @@ class EmployeeController extends Controller
         ], $this->masterDataRules());
 
         $validated = $request->validate($rules, $this->validationMessages());
+        $validated['posisi'] = $this->normalizePosition($validated['posisi'] ?? '') ?: null;
 
         // Auto-fill nik_ktp dan nama_lengkap with nik and nama_ktp respectively
         $validated['nik_ktp'] = $validated['nik'];
@@ -1267,6 +1316,9 @@ class EmployeeController extends Controller
         foreach ($this->importableFields() as $field) {
             $idx = $columnMap[$field] ?? null;
             $value = $idx !== null ? trim($row[$idx] ?? '') : '';
+            if ($field === 'posisi') {
+                $value = $this->normalizePosition($value);
+            }
             if ($field === 'status') {
                 $value = $value ?: 'Aktif';
             }
@@ -1454,12 +1506,8 @@ class EmployeeController extends Controller
         /** @var User|null $user */
         $user = $this->currentUser();
         if ($user && $user->isAdminPic()) {
-            $adminPicDepartments = config('positions.admin_pic_departments', []);
-            $managedPositions = $adminPicDepartments[$user->handled_position] ?? [];
-
-            if (!empty($managedPositions)) {
-                $query->whereIn('posisi', $managedPositions);
-            }
+            $managedPositions = $user->getManagedPositions();
+            $query->whereIn('posisi', $managedPositions);
         }
         
         // Filter berdasarkan status jika ada

@@ -42,6 +42,13 @@
 </div>
 @endif
 
+@if(session('warning'))
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle"></i> {{ session('warning') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
+
 {{-- Error import --}}
 @if(session('bpu_tk_errors') && count(session('bpu_tk_errors')) > 0)
 <div class="alert alert-danger alert-dismissible fade show">
@@ -340,7 +347,8 @@
                         <div class="col-md-6">
                             <label class="form-label">JENIS_PEKERJAAN_1</label>
                             <input type="text" name="jenis_pekerjaan_1" class="form-control @error('jenis_pekerjaan_1') is-invalid @enderror"
-                                   placeholder="cth: Kurir"
+                                   placeholder="cth: KURIR MOTOR"
+                                   list="bpu-position-options"
                                    value="{{ old('jenis_pekerjaan_1') }}">
                             @error('jenis_pekerjaan_1')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
@@ -348,6 +356,7 @@
                             <label class="form-label">JENIS_PEKERJAAN_2 <small class="text-muted">(opsional)</small></label>
                             <input type="text" name="jenis_pekerjaan_2" class="form-control @error('jenis_pekerjaan_2') is-invalid @enderror"
                                    placeholder="opsional"
+                                   list="bpu-position-options"
                                    value="{{ old('jenis_pekerjaan_2') }}">
                             @error('jenis_pekerjaan_2')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
@@ -355,9 +364,20 @@
                             <label class="form-label">LOKASI_PEKERJAAN</label>
                             <input type="text" name="lokasi_pekerjaan" class="form-control @error('lokasi_pekerjaan') is-invalid @enderror"
                                    placeholder="cth: Jakarta Selatan"
+                                   list="bpu-location-options"
                                    value="{{ old('lokasi_pekerjaan') }}">
                             @error('lokasi_pekerjaan')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
+                        <datalist id="bpu-position-options">
+                            @foreach($positionOptions ?? [] as $position)
+                                <option value="{{ $position }}"></option>
+                            @endforeach
+                        </datalist>
+                        <datalist id="bpu-location-options">
+                            @foreach($locationOptions ?? [] as $location)
+                                <option value="{{ $location }}"></option>
+                            @endforeach
+                        </datalist>
                         <div class="col-md-6">
                             <label class="form-label">UPAH</label>
                             <input type="number" name="upah" class="form-control @error('upah') is-invalid @enderror"
