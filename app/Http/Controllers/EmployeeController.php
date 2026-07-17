@@ -148,7 +148,6 @@ class EmployeeController extends Controller
             'nik_enlulu' => 'nullable|string|max:50',
             'nik_os' => 'nullable|string|max:50',
             'nama_ktp' => 'required|string|max:100',
-            'klien' => 'nullable|string|max:50',
             'posisi' => 'nullable|string|max:100',
             'penempatan' => 'nullable|string|max:100',
             'type_lokasi' => 'nullable|string|max:50',
@@ -224,6 +223,7 @@ class EmployeeController extends Controller
      */
     public function store(Request $request)
     {
+        $this->normalizeCustomerField($request);
         $this->normalizeRequestStatus($request);
 
         $rules = array_merge([
@@ -317,6 +317,7 @@ class EmployeeController extends Controller
             }
         }
         
+        $this->normalizeCustomerField($request);
         $this->normalizeRequestStatus($request);
 
         $rules = array_merge([
@@ -499,7 +500,7 @@ class EmployeeController extends Controller
         $examples = [
             'nik_ktp' => '1234567890123456', 'nama_ktp' => 'John Doe',
             'nik_enlulu' => 'ENL-0001', 'nik_os' => 'OS-12345',
-            'klien' => 'VENDOR001', 'nama_customer' => 'PT Maju Jaya',
+            'nama_customer' => 'PT Maju Jaya',
             'posisi' => 'Sprinter', 'type_lokasi' => 'Cabang', 'penempatan' => 'Jakarta Selatan',
             'area_kerja' => 'DKI Jakarta', 'status' => 'Aktif',
             'tempat_lahir' => 'Jakarta', 'tanggal_lahir' => '1995-05-20',
@@ -570,8 +571,7 @@ class EmployeeController extends Controller
             16,  // NO REKENING
             22,  // NAMA PEMILIK REKENING
             // E. Penempatan Kerja
-            20,  // NAMA CUSTOMER
-            14,  // klient
+            20,  // KLIEN
             18,  // JABATAN
             13,  // TYPE LOKASI
             18,  // LOKASI KERJA
@@ -974,7 +974,7 @@ class EmployeeController extends Controller
                             $preview['created'][] = [
                                 'nik' => $nik,
                                 'nama' => $rawData['nama_lengkap'],
-                                'klien' => $rawData['klien'],
+                                'nama_customer' => $rawData['nama_customer'],
                                 'posisi' => $rawData['posisi'],
                                 'type_lokasi' => $rawData['type_lokasi'],
                                 'penempatan' => $rawData['penempatan'],
@@ -1144,7 +1144,7 @@ class EmployeeController extends Controller
                         $created[] = [
                             'nik' => $newEmployee->nik,
                             'nama' => $newEmployee->nama_lengkap,
-                            'klien' => $newEmployee->klien,
+                            'nama_customer' => $newEmployee->nama_customer,
                             'posisi' => $newEmployee->posisi,
                             'type_lokasi' => $newEmployee->type_lokasi,
                             'penempatan' => $newEmployee->penempatan,
@@ -1249,8 +1249,7 @@ class EmployeeController extends Controller
             'nama_ktp' => ['NAMA SESUAI KTP', 'NAMA KTP', 'NAMA'],
             'nik_enlulu' => ['NIK ENLULU', 'NIK SEMENTARA ENLULU', 'ENLULU NIK'],
             'nik_os' => ['NIK OS', 'NIK OUTSOURCING', 'NIK CLIENT'],
-            'klien' => ['KLIEN', 'CLIENT'],
-            'nama_customer' => ['NAMA CUSTOMER', 'CUSTOMER'],
+            'nama_customer' => ['NAMA CUSTOMER', 'KLIEN', 'CLIENT', 'CUSTOMER'],
             'posisi' => ['JABATAN', 'POSISI'],
             'penempatan' => ['LOKASI KERJA', 'PENEMPATAN', 'LOKASI'],
             'type_lokasi' => ['TYPE LOKASI', 'TIPE LOKASI'],
@@ -1331,7 +1330,7 @@ class EmployeeController extends Controller
     private function importableFields(): array
     {
         return [
-            'nama_ktp', 'nik_enlulu', 'nik_os', 'klien', 'nama_customer', 'posisi', 'penempatan',
+            'nama_ktp', 'nik_enlulu', 'nik_os', 'nama_customer', 'posisi', 'penempatan',
             'type_lokasi', 'area_kerja', 'no_rekening', 'nama_bank', 'nama_di_rekening',
             'status', 'note1',
             // A. Biodata
@@ -1493,6 +1492,13 @@ class EmployeeController extends Controller
         }
     }
 
+    private function normalizeCustomerField(Request $request): void
+    {
+        if (!$request->filled('nama_customer') && $request->filled('klien')) {
+            $request->merge(['nama_customer' => $request->input('klien')]);
+        }
+    }
+
     private function importDateFields(): array
     {
         return [
@@ -1614,8 +1620,7 @@ class EmployeeController extends Controller
             ['NAMA PEMILIK REKENING', 'nama_di_rekening'],
 
             // E. Penempatan Kerja
-            ['NAMA CUSTOMER', 'nama_customer'],
-            ['KLIEN', 'klien'],
+            ['KLIEN', 'nama_customer'],
             ['JABATAN', 'posisi'],
             ['TYPE LOKASI', 'type_lokasi'],
             ['LOKASI KERJA', 'penempatan'],

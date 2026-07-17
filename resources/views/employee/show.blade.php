@@ -122,7 +122,7 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6"><dl class="row mb-0">
-                        <dt class="col-sm-5">Nama Customer</dt><dd class="col-sm-7">{{ $val($employee->nama_customer) }}</dd>
+                        <dt class="col-sm-5">Klien</dt><dd class="col-sm-7">{{ $val($employee->nama_customer) }}</dd>
                         <dt class="col-sm-5">Kode Vendor</dt><dd class="col-sm-7">{{ $val($employee->kode_vendor) }}</dd>
                         <dt class="col-sm-5">Jabatan</dt><dd class="col-sm-7">{{ $val($employee->posisi) }}</dd>
                         <dt class="col-sm-5">Type Lokasi</dt><dd class="col-sm-7">{{ $val($employee->type_lokasi) }}</dd>

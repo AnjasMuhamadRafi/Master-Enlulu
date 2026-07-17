@@ -244,7 +244,7 @@
                     <td><strong>{{ ($employees->currentPage() - 1) * $employees->perPage() + $key + 1 }}</strong></td>
                     <td><strong>{{ $emp->nik_ktp ?? '-' }}</strong></td>
                     <td>{{ $emp->nama_ktp ?? '-' }}</td>
-                    <td>{{ $emp->klien ?? '-' }}</td>
+                    <td>{{ $emp->nama_customer ?? '-' }}</td>
                     <td>{{ $emp->posisi ?? '-' }}</td>
                     <td>{{ $emp->type_lokasi ?? '-' }}</td>
                     <td>{{ $emp->penempatan ?? '-' }}</td>

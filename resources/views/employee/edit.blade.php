@@ -253,7 +253,7 @@
                     <h6 class="section-title">E. Penempatan Kerja</h6>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Nama Customer</label>
+                            <label class="form-label">Klien</label>
                             <input type="text" class="form-control @error('nama_customer') is-invalid @enderror" name="nama_customer" value="{{ old('nama_customer', $employee->nama_customer) }}">
                             @error('nama_customer')<span class="invalid-feedback d-block">{{ $message }}</span>@enderror
                         </div>

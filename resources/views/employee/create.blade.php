@@ -265,7 +265,7 @@
                     <h6 class="section-title">E. Penempatan Kerja</h6>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Nama Customer</label>
+                            <label class="form-label">Klien</label>
                             <input type="text" class="form-control @error('nama_customer') is-invalid @enderror" name="nama_customer" value="{{ old('nama_customer') }}">
                             @error('nama_customer')<span class="invalid-feedback d-block">{{ $message }}</span>@enderror
                         </div>
@@ -484,6 +484,9 @@
         'NAMA PEMILIK': 'nama_di_rekening',
         'NAMA BANK': 'nama_bank',
         'NAMA CUSTOMER': 'nama_customer',
+        'KLIEN': 'nama_customer',
+        'CLIENT': 'nama_customer',
+        'CUSTOMER': 'nama_customer',
         'POSISI LOWONGAN': 'posisi',
         'POSISI': 'posisi',
         'JABATAN': 'posisi',
@@ -520,7 +523,7 @@
         'no_kk': 'No. KK', 'email': 'E-mail', 'no_bpjs_tk': 'BPJS Ketenagakerjaan',
         'no_bpjs_kesehatan': 'BPJS Kesehatan', 'keterangan_biodata': 'Keterangan Biodata',
         'no_rekening': 'No. Rekening', 'nama_bank': 'Nama Bank', 'nama_di_rekening': 'Nama di Rekening',
-        'nama_customer': 'Nama Customer', 'posisi': 'Jabatan', 'penempatan': 'Lokasi Kerja',
+        'nama_customer': 'Klien', 'posisi': 'Jabatan', 'penempatan': 'Lokasi Kerja',
         'kode_vendor': 'Kode Vendor', 'type_lokasi': 'Type Lokasi', 'area_kerja': 'Area Kerja',
         'tanggal_masuk': 'Tanggal Masuk', 'tanggal_keluar': 'Tanggal Keluar',
         'tanggal_perpanjangan_terakhir': 'Tgl Perpanjangan Terakhir', 'keterangan_perpanjangan': 'Keterangan Perpanjangan',

@@ -82,6 +82,29 @@ class EmployeeImportTest extends TestCase
         $this->assertSame(2, $mapping['nama_ktp']);
     }
 
+    #[DataProvider('customerHeaders')]
+    public function test_import_maps_customer_headers_to_nama_customer(string $header): void
+    {
+        $mapping = $this->invokePrivate('detectColumnMapping', [[
+            'NIK KTP',
+            'NAMA KTP',
+            $header,
+        ]]);
+
+        $this->assertSame(2, $mapping['nama_customer']);
+        $this->assertArrayNotHasKey('klien', $mapping);
+    }
+
+    public static function customerHeaders(): array
+    {
+        return [
+            'klien' => ['KLIEN'],
+            'client' => ['CLIENT'],
+            'nama customer' => ['NAMA CUSTOMER'],
+            'customer' => ['CUSTOMER'],
+        ];
+    }
+
     public function test_import_requires_name_value_on_each_row(): void
     {
         $this->expectException(\InvalidArgumentException::class);

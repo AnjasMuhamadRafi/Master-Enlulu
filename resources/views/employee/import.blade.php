@@ -130,7 +130,7 @@
                                     <tr style="background: #d4edda;">
                                         <th>NIK KTP</th>
                                         <th>Nama</th>
-                                        <th>Kode Vendor</th>
+                                        <th>Klien</th>
                                         <th>Posisi</th>
                                         <th>Type Lokasi</th>
                                         <th>Penempatan</th>
@@ -380,7 +380,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 tbody.innerHTML = createdItems.map(item => `<tr>
                     <td><code>${escapeHtml(item.nik)}</code></td>
                     <td><strong>${escapeHtml(item.nama)}</strong></td>
-                    <td>${escapeHtml(item.kode_vendor || '-')}</td>
+                    <td>${escapeHtml(item.nama_customer || '-')}</td>
                     <td>${escapeHtml(item.posisi || '-')}</td>
                     <td>${escapeHtml(item.type_lokasi || '-')}</td>
                     <td>${escapeHtml(item.penempatan || '-')}</td>
