@@ -52,9 +52,11 @@
                         <div class="alert alert-info mb-4">
                             <h6 class="mb-3"><i class="bi bi-info-circle"></i> Petunjuk Format File</h6>
                             <ul class="mb-0 small">
-                                <li><strong>Kolom yang diperlukan:</strong></li>
-                                <li style="margin-top: 8px;">NIK KTP, NAMA KTP/NAMA, KODE VENDOR, POSISI/JABATAN, PENEMPATAN/LOKASI, TYPE LOKASI, AREA KERJA, NO REKENING, NAMA BANK, NAMA REKENING, STATUS, NOTE</li>
+                                <li><strong>Kolom wajib:</strong> NIK KTP dan NAMA KTP/NAMA SESUAI KTP</li>
+                                <li style="margin-top: 8px;">Kolom lainnya boleh dikosongkan dan dapat dilengkapi melalui import berikutnya</li>
                                 <li style="margin-top: 8px;">Data yang sudah ada akan diupdate otomatis berdasarkan NIK KTP</li>
+                                <li>Kolom kosong tidak akan menimpa data lama</li>
+                                <li>Jenis kelamin LAKI-LAKI/PEREMPUAN otomatis disimpan sebagai Pria/Wanita</li>
                                 <li>Gunakan template Excel yang sudah diformat untuk kemudahan input</li>
                                 <li>Pastikan file tidak memiliki baris kosong di atas header</li>
                             </ul>
@@ -102,6 +104,16 @@
                         </div>
                     </div>
 
+                    <div class="alert alert-secondary mb-4" id="previewTotals">
+                        Total baris terisi: 0 | Valid unik: 0 | NIK duplikat: 0
+                    </div>
+
+                    <div class="alert alert-info mb-4" id="partialImportNotice" style="display: none;">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Import parsial aktif.</strong>
+                        Baris valid tetap dapat diimpor. Baris error akan dilewati dan dapat diperbaiki pada file, lalu diimpor kembali.
+                    </div>
+
                     {{-- Debug Info: Detected Columns --}}
                     <div class="alert alert-info mb-4" id="debugColumnsSection" style="display: none; font-size: 0.85rem;">
                         <small><strong>Kolom yang Terdeteksi:</strong></small>
@@ -111,6 +123,7 @@
                     {{-- Created Data --}}
                     <div id="createdSection" style="display: none; margin-bottom: 25px;">
                         <h6 style="color: #155724; margin-bottom: 12px;">✓ DATA YANG AKAN DITAMBAH</h6>
+                        <p class="small text-muted" id="createdPreviewLimit" style="display: none;"></p>
                         <div class="table-responsive mb-3">
                             <table class="table table-sm table-bordered">
                                 <thead>
@@ -138,12 +151,14 @@
                     {{-- Updated Data --}}
                     <div id="updatedSection" style="display: none; margin-bottom: 25px;">
                         <h6 style="color: #004085; margin-bottom: 12px;">↻ DATA YANG AKAN DIUPDATE</h6>
+                        <p class="small text-muted" id="updatedPreviewLimit" style="display: none;"></p>
                         <div id="updatedTable"></div>
                     </div>
 
                     {{-- Errors --}}
                     <div id="errorSection" style="display: none; margin-bottom: 25px;">
                         <h6 style="color: #721c24; margin-bottom: 12px;">⚠ ERROR</h6>
+                        <p class="small text-muted" id="errorPreviewLimit" style="display: none;"></p>
                         <div class="alert alert-danger" style="font-size: 0.9rem;">
                             <ul class="mb-0" id="errorTable">
                             </ul>
@@ -154,6 +169,9 @@
                     <div class="d-flex gap-2">
                         <button type="button" class="btn btn-success" id="confirmBtn">
                             <i class="bi bi-check-circle"></i> Konfirmasi & Proses Import
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" id="fixFileBtn" style="display: none;">
+                            <i class="bi bi-pencil-square"></i> Perbaiki File Error
                         </button>
                         <button type="button" class="btn btn-secondary" id="cancelBtn">
                             <i class="bi bi-arrow-left"></i> Batal
@@ -192,6 +210,7 @@
                 <h6 class="mb-2"><i class="bi bi-lightbulb"></i> Tips</h6>
                 <ul class="ps-3 mb-0">
                     <li>NIK KTP harus 16 angka</li>
+                    <li>Nama sesuai KTP wajib diisi</li>
                     <li>Data lama akan diupdate jika NIK KTP sama</li>
                     <li>Periksa error sebelum import</li>
                     <li>Download template untuk format yang benar</li>
@@ -213,10 +232,39 @@ document.addEventListener('DOMContentLoaded', function() {
     const previewStep = document.getElementById('previewStep');
     const processingStep = document.getElementById('processingStep');
     const confirmBtn = document.getElementById('confirmBtn');
+    const fixFileBtn = document.getElementById('fixFileBtn');
     const cancelBtn = document.getElementById('cancelBtn');
     const uploadForm = document.getElementById('uploadForm');
 
     let currentPreviewData = null;
+    const previewLimit = 100;
+
+    function escapeHtml(value) {
+        const element = document.createElement('div');
+        element.textContent = value == null ? '' : String(value);
+        return element.innerHTML;
+    }
+
+    function setPreviewLimitMessage(elementId, shown, total) {
+        const element = document.getElementById(elementId);
+        if (total > shown) {
+            element.textContent = `Menampilkan ${shown} dari ${total} data agar halaman tetap ringan.`;
+            element.style.display = 'block';
+            return;
+        }
+
+        element.style.display = 'none';
+    }
+
+    function returnToUpload() {
+        currentPreviewData = null;
+        previewStep.style.display = 'none';
+        processingStep.style.display = 'none';
+        uploadStep.style.display = 'block';
+        fileInput.value = '';
+        fileInfo.style.display = 'none';
+        validateBtn.disabled = true;
+    }
 
     // File upload handling
     fileInput.addEventListener('change', function() {
@@ -290,11 +338,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Store preview data
             currentPreviewData = data.preview;
+            const validCount = Number(data.preview.total || 0);
+            const createdCount = Number(data.preview.created_count ?? data.preview.created.length);
+            const updatedCount = Number(data.preview.updated_count ?? data.preview.updated.length);
+            const errorCount = Number(data.preview.error_count ?? data.preview.errors.length);
 
             // Update counts
-            document.getElementById('createdCount').textContent = data.preview.created.length;
-            document.getElementById('updatedCount').textContent = data.preview.updated.length;
-            document.getElementById('errorCount').textContent = data.preview.errors.length;
+            document.getElementById('createdCount').textContent = createdCount;
+            document.getElementById('updatedCount').textContent = updatedCount;
+            document.getElementById('errorCount').textContent = errorCount;
+            document.getElementById('previewTotals').textContent =
+                'Total baris terisi: ' + data.preview.file_rows
+                + ' | Valid unik: ' + data.preview.total
+                + ' | NIK duplikat: ' + data.preview.duplicate_count;
+
+            document.getElementById('partialImportNotice').style.display = errorCount > 0 ? 'block' : 'none';
+            fixFileBtn.style.display = errorCount > 0 ? 'inline-block' : 'none';
+            confirmBtn.disabled = validCount === 0;
+            confirmBtn.innerHTML = validCount > 0
+                ? `<i class="bi bi-check-circle"></i> Import ${validCount} Baris Valid`
+                : '<i class="bi bi-x-circle"></i> Tidak Ada Baris Valid';
 
             // Display debug info about detected columns
             if (data.columnMapping && data.headers) {
@@ -313,24 +376,22 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.preview.created.length > 0) {
                 document.getElementById('createdSection').style.display = 'block';
                 const tbody = document.getElementById('createdTable');
-                tbody.innerHTML = '';
-                data.preview.created.forEach(item => {
-                    const row = `<tr>
-                        <td><code>${item.nik}</code></td>
-                        <td><strong>${item.nama}</strong></td>
-                        <td>${item.kode_vendor || '-'}</td>
-                        <td>${item.posisi || '-'}</td>
-                        <td>${item.type_lokasi || '-'}</td>
-                        <td>${item.penempatan || '-'}</td>
-                        <td>${item.area_kerja || '-'}</td>
-                        <td>${item.nama_bank || '-'}</td>
-                        <td>${item.no_rekening || '-'}</td>
-                        <td>${item.nama_di_rekening || '-'}</td>
-                        <td><span class="badge bg-success">${item.status}</span></td>
-                        <td>${item.note1 || '-'}</td>
-                    </tr>`;
-                    tbody.innerHTML += row;
-                });
+                const createdItems = data.preview.created.slice(0, previewLimit);
+                tbody.innerHTML = createdItems.map(item => `<tr>
+                    <td><code>${escapeHtml(item.nik)}</code></td>
+                    <td><strong>${escapeHtml(item.nama)}</strong></td>
+                    <td>${escapeHtml(item.kode_vendor || '-')}</td>
+                    <td>${escapeHtml(item.posisi || '-')}</td>
+                    <td>${escapeHtml(item.type_lokasi || '-')}</td>
+                    <td>${escapeHtml(item.penempatan || '-')}</td>
+                    <td>${escapeHtml(item.area_kerja || '-')}</td>
+                    <td>${escapeHtml(item.nama_bank || '-')}</td>
+                    <td>${escapeHtml(item.no_rekening || '-')}</td>
+                    <td>${escapeHtml(item.nama_di_rekening || '-')}</td>
+                    <td><span class="badge bg-success">${escapeHtml(item.status)}</span></td>
+                    <td>${escapeHtml(item.note1 || '-')}</td>
+                </tr>`).join('');
+                setPreviewLimitMessage('createdPreviewLimit', createdItems.length, createdCount);
             } else {
                 document.getElementById('createdSection').style.display = 'none';
             }
@@ -339,29 +400,29 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.preview.updated.length > 0) {
                 document.getElementById('updatedSection').style.display = 'block';
                 const updatedDiv = document.getElementById('updatedTable');
-                updatedDiv.innerHTML = '';
-                data.preview.updated.forEach(item => {
+                const updatedItems = data.preview.updated.slice(0, previewLimit);
+                updatedDiv.innerHTML = updatedItems.map(item => {
                     let changesHtml = '<ul style="list-style: none; padding: 0; margin: 0;">';
                     for (const [field, change] of Object.entries(item.changes)) {
                         changesHtml += `<li style="margin: 4px 0; font-size: 0.9rem;">
-                            <strong>${field}:</strong><br>
-                            <code style="color: #dc3545;">${change.old}</code> 
+                            <strong>${escapeHtml(field)}:</strong><br>
+                            <code style="color: #dc3545;">${escapeHtml(change.old)}</code>
                             <i class="bi bi-arrow-right"></i> 
-                            <code style="color: #198754;">${change.new}</code>
+                            <code style="color: #198754;">${escapeHtml(change.new)}</code>
                         </li>`;
                     }
                     changesHtml += '</ul>';
 
-                    const itemHtml = `<div class="card mb-2">
+                    return `<div class="card mb-2">
                         <div class="card-body p-2">
                             <div style="margin-bottom: 8px;">
-                                <strong><code>${item.nik}</code> - ${item.nama}</strong>
+                                <strong><code>${escapeHtml(item.nik)}</code> - ${escapeHtml(item.nama)}</strong>
                             </div>
                             ${changesHtml}
                         </div>
                     </div>`;
-                    updatedDiv.innerHTML += itemHtml;
-                });
+                }).join('');
+                setPreviewLimitMessage('updatedPreviewLimit', updatedItems.length, updatedCount);
             } else {
                 document.getElementById('updatedSection').style.display = 'none';
             }
@@ -370,10 +431,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.preview.errors.length > 0) {
                 document.getElementById('errorSection').style.display = 'block';
                 const errorTable = document.getElementById('errorTable');
-                errorTable.innerHTML = '';
-                data.preview.errors.forEach(error => {
-                    errorTable.innerHTML += `<li>${error}</li>`;
-                });
+                const errorItems = data.preview.errors.slice(0, previewLimit);
+                errorTable.innerHTML = errorItems
+                    .map(error => `<li>${escapeHtml(error)}</li>`)
+                    .join('');
+                setPreviewLimitMessage('errorPreviewLimit', errorItems.length, errorCount);
             } else {
                 document.getElementById('errorSection').style.display = 'none';
             }
@@ -393,8 +455,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Confirm button
     confirmBtn.addEventListener('click', function() {
-        if (currentPreviewData.errors.length > 0) {
-            if (!confirm('Ada ' + currentPreviewData.errors.length + ' error(s). Lanjutkan import?')) {
+        if (!currentPreviewData || Number(currentPreviewData.total || 0) === 0) {
+            return;
+        }
+
+        const errorCount = Number(currentPreviewData.error_count ?? currentPreviewData.errors.length);
+        if (errorCount > 0) {
+            const message = errorCount + ' baris error akan dilewati.\n'
+                + currentPreviewData.total + ' baris valid akan tetap diimpor.\n\n'
+                + 'Lanjutkan import parsial?';
+            if (!confirm(message)) {
                 return;
             }
         }
@@ -427,7 +497,22 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(data => {
             if (data.success) {
-                // Show success and redirect
+                let resultMessage = data.message
+                    + '\nData baru: ' + data.created_count
+                    + '\nData diperbarui: ' + data.updated_count
+                    + '\nNIK duplikat: ' + data.duplicate_count
+                    + '\nError: ' + data.error_count;
+
+                if (data.error_samples && data.error_samples.length > 0) {
+                    resultMessage += '\n\nContoh error:\n- ' + data.error_samples.join('\n- ');
+                    if (data.error_count > data.error_samples.length) {
+                        resultMessage += '\n- ... dan '
+                            + (data.error_count - data.error_samples.length)
+                            + ' error lainnya';
+                    }
+                }
+
+                alert(resultMessage);
                 window.location.href = data.redirect;
             } else {
                 throw new Error(data.message || 'Import failed');
@@ -441,15 +526,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    fixFileBtn.addEventListener('click', returnToUpload);
+
     // Cancel button
-    cancelBtn.addEventListener('click', function() {
-        currentPreviewData = null;
-        previewStep.style.display = 'none';
-        uploadStep.style.display = 'block';
-        fileInput.value = '';
-        fileInfo.style.display = 'none';
-        validateBtn.disabled = true;
-    });
+    cancelBtn.addEventListener('click', returnToUpload);
 });
 </script>
 

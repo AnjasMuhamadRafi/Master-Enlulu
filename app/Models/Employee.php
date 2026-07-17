@@ -9,6 +9,8 @@ class Employee extends Model
 {
     use HasFactory;
 
+    public const EMPLOYMENT_STATUSES = ['Aktif', 'Training', 'Resign', 'Cancel', 'Fraud'];
+
     // Set NIK as primary key instead of id
     protected $primaryKey = 'nik';
     
@@ -84,6 +86,36 @@ class Employee extends Model
         'tanggal_perpanjangan_terakhir' => 'date',
         'jumlah_anak' => 'integer',
     ];
+
+    public static function normalizeStatusValue(?string $status): ?string
+    {
+        $value = trim((string) $status);
+        if ($value === '') {
+            return null;
+        }
+
+        $key = preg_replace('/[^A-Z]/', '', strtoupper($value));
+
+        return match ($key) {
+            'AKTIF', 'ACTIVE' => 'Aktif',
+            'TRAINING', 'PELATIHAN' => 'Training',
+            'RESIGN', 'RESIGNED', 'TIDAKAKTIF', 'NONAKTIF' => 'Resign',
+            'CANCEL', 'CANCELED', 'CANCELLED', 'BATAL' => 'Cancel',
+            'FRAUD', 'KECURANGAN' => 'Fraud',
+            default => null,
+        };
+    }
+
+    public function setStatusAttribute(?string $status): void
+    {
+        $normalized = self::normalizeStatusValue($status);
+
+        if ($normalized === null && trim((string) $status) !== '') {
+            throw new \InvalidArgumentException("Status kerja tidak valid: '$status'");
+        }
+
+        $this->attributes['status'] = $normalized;
+    }
 
     /**
      * Get list of positions managed by this ADMIN/PIC employee

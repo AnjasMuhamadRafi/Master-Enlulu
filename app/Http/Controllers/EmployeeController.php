@@ -6,9 +6,11 @@ use App\Models\ActivityLog;
 use App\Models\Employee;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
@@ -17,6 +19,8 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class EmployeeController extends Controller
 {
+    private const IMPORT_PREVIEW_LIMIT = 100;
+
     /**
      * Display a listing of the resource.
      */
@@ -134,8 +138,8 @@ class EmployeeController extends Controller
 
     /**
      * Aturan validasi field master data karyawan (dipakai store & update).
-     * Bagian Biodata (kecuali keterangan) & Emergency Contact wajib;
-     * Banking & Penempatan Kerja opsional.
+     * Hanya nama sesuai KTP, tempat lahir, dan tanggal lahir yang wajib.
+     * NIK KTP divalidasi terpisah pada store/update.
      */
     private function masterDataRules(): array
     {
@@ -144,7 +148,7 @@ class EmployeeController extends Controller
             'nik_enlulu' => 'nullable|string|max:50',
             'nik_os' => 'nullable|string|max:50',
             'nama_ktp' => 'required|string|max:100',
-            'kode_vendor' => 'nullable|string|max:50',
+            'klien' => 'nullable|string|max:50',
             'posisi' => 'nullable|string|max:100',
             'penempatan' => 'nullable|string|max:100',
             'type_lokasi' => 'nullable|string|max:50',
@@ -152,35 +156,35 @@ class EmployeeController extends Controller
             'no_rekening' => 'nullable|string|max:30',
             'nama_bank' => 'nullable|string|max:50',
             'nama_di_rekening' => 'nullable|string|max:100',
-            'status' => 'nullable|in:Aktif,Training,Resign,Cancel,Fraud',
+            'status' => 'nullable|in:' . implode(',', Employee::EMPLOYMENT_STATUSES),
             'note1' => 'nullable|string|max:500',
 
-            // A. Biodata (wajib, kecuali keterangan_biodata)
+            // A. Biodata
             'tempat_lahir' => 'required|string|max:100',
             'tanggal_lahir' => 'required|date',
-            'jenis_kelamin' => 'required|in:Pria,Wanita',
-            'agama' => 'required|string|max:30',
-            'pendidikan' => 'required|string|max:30',
-            'status_pernikahan' => 'required|string|max:30',
+            'jenis_kelamin' => 'nullable|in:Pria,Wanita',
+            'agama' => 'nullable|string|max:30',
+            'pendidikan' => 'nullable|string|max:30',
+            'status_pernikahan' => 'nullable|string|max:30',
             'jumlah_anak' => 'nullable|integer|min:0|max:50',
-            'alamat' => 'required|string|max:255',
-            'kelurahan' => 'required|string|max:100',
-            'kecamatan' => 'required|string|max:100',
-            'kota' => 'required|string|max:100',
-            'propinsi' => 'required|string|max:100',
-            'status_tempat_tinggal' => 'required|string|max:30',
-            'no_hp' => 'required|string|max:20',
-            'no_kk' => 'required|string|max:20',
-            'email' => 'required|email|max:100',
+            'alamat' => 'nullable|string|max:255',
+            'kelurahan' => 'nullable|string|max:100',
+            'kecamatan' => 'nullable|string|max:100',
+            'kota' => 'nullable|string|max:100',
+            'propinsi' => 'nullable|string|max:100',
+            'status_tempat_tinggal' => 'nullable|string|max:30',
+            'no_hp' => 'nullable|string|max:20',
+            'no_kk' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:100',
             'no_bpjs_tk' => 'nullable|string|max:30',
             'no_bpjs_kesehatan' => 'nullable|string|max:30',
             'keterangan_biodata' => 'nullable|string|max:500',
 
-            // B. Emergency Contact (wajib)
-            'ec_nama' => 'required|string|max:100',
-            'ec_alamat' => 'required|string|max:255',
-            'ec_no_hp' => 'required|string|max:20',
-            'ec_hubungan' => 'required|string|max:50',
+            // B. Emergency Contact
+            'ec_nama' => 'nullable|string|max:100',
+            'ec_alamat' => 'nullable|string|max:255',
+            'ec_no_hp' => 'nullable|string|max:20',
+            'ec_hubungan' => 'nullable|string|max:50',
 
             // E. Penempatan Kerja (opsional)
             'nama_customer' => 'nullable|string|max:150',
@@ -220,13 +224,18 @@ class EmployeeController extends Controller
      */
     public function store(Request $request)
     {
+        $this->normalizeRequestStatus($request);
+
         $rules = array_merge([
             'nik' => 'required|unique:employees,nik|regex:/^[0-9]{16}$/|digits:16',
-            'foto' => 'required|image|max:10240',
+            'foto' => 'nullable|image|max:10240',
         ], $this->masterDataRules());
 
         $validated = $request->validate($rules, $this->validationMessages());
         $validated['posisi'] = $this->normalizePosition($validated['posisi'] ?? '') ?: null;
+        if (($validated['status'] ?? null) === null) {
+            unset($validated['status']);
+        }
 
         // Auto-fill nik_ktp dan nama_lengkap with nik and nama_ktp respectively
         $validated['nik_ktp'] = $validated['nik'];
@@ -308,6 +317,8 @@ class EmployeeController extends Controller
             }
         }
         
+        $this->normalizeRequestStatus($request);
+
         $rules = array_merge([
             'nik' => 'required|unique:employees,nik,' . $employee->nik . ',nik|regex:/^[0-9]{16}$/|digits:16',
             'foto' => 'nullable|image|max:10240',
@@ -315,6 +326,9 @@ class EmployeeController extends Controller
 
         $validated = $request->validate($rules, $this->validationMessages());
         $validated['posisi'] = $this->normalizePosition($validated['posisi'] ?? '') ?: null;
+        if (($validated['status'] ?? null) === null) {
+            unset($validated['status']);
+        }
 
         // Auto-fill nik_ktp dan nama_lengkap with nik and nama_ktp respectively
         $validated['nik_ktp'] = $validated['nik'];
@@ -485,7 +499,7 @@ class EmployeeController extends Controller
         $examples = [
             'nik_ktp' => '1234567890123456', 'nama_ktp' => 'John Doe',
             'nik_enlulu' => 'ENL-0001', 'nik_os' => 'OS-12345',
-            'kode_vendor' => 'VENDOR001', 'nama_customer' => 'PT Maju Jaya',
+            'klien' => 'VENDOR001', 'nama_customer' => 'PT Maju Jaya',
             'posisi' => 'Sprinter', 'type_lokasi' => 'Cabang', 'penempatan' => 'Jakarta Selatan',
             'area_kerja' => 'DKI Jakarta', 'status' => 'Aktif',
             'tempat_lahir' => 'Jakarta', 'tanggal_lahir' => '1995-05-20',
@@ -557,7 +571,7 @@ class EmployeeController extends Controller
             22,  // NAMA PEMILIK REKENING
             // E. Penempatan Kerja
             20,  // NAMA CUSTOMER
-            14,  // KODE VENDOR
+            14,  // klient
             18,  // JABATAN
             13,  // TYPE LOKASI
             18,  // LOKASI KERJA
@@ -878,7 +892,7 @@ class EmployeeController extends Controller
             if (!$columnMap) {
                 return response()->json([
                     'success' => false,
-                    'error' => 'Format file tidak valid. Pastikan ada kolom NIK KTP atau sesuai template.'
+                    'error' => 'Format file tidak valid. Pastikan ada kolom NIK KTP dan NAMA KTP sesuai template.'
                 ], 400);
             }
 
@@ -886,40 +900,42 @@ class EmployeeController extends Controller
                 'created' => [],
                 'updated' => [],
                 'errors' => [],
-                'total' => 0
+                'created_count' => 0,
+                'updated_count' => 0,
+                'error_count' => 0,
+                'total' => 0,
+                'file_rows' => 0,
+                'duplicate_count' => 0,
             ];
-            
+
+            $dataRows = array_slice($rows, 1);
+            $existingEmployees = $this->existingEmployeesForImport($dataRows, $columnMap);
+            $seenNiks = [];
             $row_num = 1;
 
-            foreach (array_slice($rows, 1) as $row) {
+            foreach ($dataRows as $row) {
                 $row_num++;
                 
-                // Skip empty rows
-                if (empty($row[0])) continue;
+                // Kolom NO boleh kosong; lewati hanya baris yang seluruh kolomnya kosong.
+                if ($this->isImportRowEmpty($row)) {
+                    continue;
+                }
+
+                $preview['file_rows']++;
 
                 try {
-                    // Extract data sesuai column mapping
-                    $nik_ktp = trim($row[$columnMap['nik_ktp'] ?? 0] ?? '');
-                    $nik = $nik_ktp;
-
-                    if (!preg_match('/^[0-9]{16}$/', $nik)) {
-                        // Get detail untuk error message
-                        $nama_ktp = trim($row[$columnMap['nama_ktp'] ?? 0] ?? '') ?: '-';
-                        $posisi = trim($row[$columnMap['posisi'] ?? 0] ?? '') ?: '-';
-                        $penempatan = trim($row[$columnMap['penempatan'] ?? 0] ?? '') ?: '-';
-                        $preview['errors'][] = "Baris $row_num: NIK KTP harus 16 angka (NIK: $nik, Nama: $nama_ktp, Posisi: $posisi, Penempatan: $penempatan)";
-                        continue;
-                    }
+                    [$nik, $nik_ktp] = $this->extractImportIdentity($row, $columnMap);
+                    $this->ensureUniqueImportIdentity($nik, $row_num, $seenNiks);
 
                     $rawData = $this->buildRowData($nik, $nik_ktp, $row, $columnMap);
+                    $dataToUpdate = $this->filterImportData($rawData);
 
                     // Check if employee exists
-                    $existing = Employee::find($nik);
+                    $existing = $existingEmployees->get($nik);
                     if ($existing) {
                         // Calculate changes
                         $changes = [];
-                        foreach (array_keys($rawData) as $field) {
-                            $newVal = $rawData[$field];
+                        foreach ($dataToUpdate as $field => $newVal) {
                             $dbVal = (string)($existing->getAttribute($field) ?? '');
                             $newValStr = (string)($newVal ?? '');
                             
@@ -939,39 +955,52 @@ class EmployeeController extends Controller
                                     $changeDetails[$field] = $change;
                                 }
                             }
-                            
+                             
                             if (!empty($changeDetails)) {
-                                $preview['updated'][] = [
-                                    'nik' => $existing->nik,
-                                    'nama' => $existing->nama_lengkap,
-                                    'changes' => $changeDetails
-                                ];
+                                $preview['updated_count']++;
+                                if (count($preview['updated']) < self::IMPORT_PREVIEW_LIMIT) {
+                                    $preview['updated'][] = [
+                                        'nik' => $existing->nik,
+                                        'nama' => $existing->nama_lengkap,
+                                        'changes' => $changeDetails
+                                    ];
+                                }
                             }
                         }
                     } else {
                         // Create new employee
-                        $preview['created'][] = [
-                            'nik' => $nik,
-                            'nama' => $rawData['nama_lengkap'],
-                            'kode_vendor' => $rawData['kode_vendor'],
-                            'posisi' => $rawData['posisi'],
-                            'type_lokasi' => $rawData['type_lokasi'],
-                            'penempatan' => $rawData['penempatan'],
-                            'area_kerja' => $rawData['area_kerja'],
-                            'nama_bank' => $rawData['nama_bank'],
-                            'no_rekening' => $rawData['no_rekening'],
-                            'nama_di_rekening' => $rawData['nama_di_rekening'],
-                            'status' => $rawData['status'],
-                            'note1' => $rawData['note1']
-                        ];
+                        $preview['created_count']++;
+                        if (count($preview['created']) < self::IMPORT_PREVIEW_LIMIT) {
+                            $preview['created'][] = [
+                                'nik' => $nik,
+                                'nama' => $rawData['nama_lengkap'],
+                                'klien' => $rawData['klien'],
+                                'posisi' => $rawData['posisi'],
+                                'type_lokasi' => $rawData['type_lokasi'],
+                                'penempatan' => $rawData['penempatan'],
+                                'area_kerja' => $rawData['area_kerja'],
+                                'nama_bank' => $rawData['nama_bank'],
+                                'no_rekening' => $rawData['no_rekening'],
+                                'nama_di_rekening' => $rawData['nama_di_rekening'],
+                                'status' => $rawData['status'] ?: 'Aktif',
+                                'note1' => $rawData['note1']
+                            ];
+                        }
                     }
-                    
+                     
                     $preview['total']++;
                 } catch (\Exception $e) {
+                    $preview['error_count']++;
+                    if (str_starts_with($e->getMessage(), 'NIK KTP duplikat')) {
+                        $preview['duplicate_count']++;
+                    }
+
                     // Add row detail untuk context
-                    $nama_ktp = trim($row[$columnMap['nama_ktp'] ?? 0] ?? '') ?: '-';
-                    $posisi = trim($row[$columnMap['posisi'] ?? 0] ?? '') ?: '-';
-                    $preview['errors'][] = "Baris $row_num (Nama: $nama_ktp, Posisi: $posisi): " . $e->getMessage();
+                    if (count($preview['errors']) < self::IMPORT_PREVIEW_LIMIT) {
+                        $nama_ktp = trim($row[$columnMap['nama_ktp'] ?? 0] ?? '') ?: '-';
+                        $posisi = trim($row[$columnMap['posisi'] ?? 0] ?? '') ?: '-';
+                        $preview['errors'][] = "Baris $row_num (Nama: $nama_ktp, Posisi: $posisi): " . $e->getMessage();
+                    }
                 }
             }
 
@@ -1000,6 +1029,8 @@ class EmployeeController extends Controller
      */
     public function import(Request $request)
     {
+        $transactionStarted = false;
+
         try {
             $validated = $request->validate([
                 'file' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120'
@@ -1033,7 +1064,7 @@ class EmployeeController extends Controller
             if (!$columnMap) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Format file tidak valid. Pastikan ada kolom NIK KTP atau sesuai template.'
+                    'message' => 'Format file tidak valid. Pastikan ada kolom NIK KTP dan NAMA KTP sesuai template.'
                 ], 400);
             }
 
@@ -1041,48 +1072,39 @@ class EmployeeController extends Controller
             $created = [];
             $updated = [];
             $errors = [];
+            $fileRows = 0;
+            $duplicateCount = 0;
+            $dataRows = array_slice($rows, 1);
+            $existingEmployees = $this->existingEmployeesForImport($dataRows, $columnMap);
+            $seenNiks = [];
             $row_num = 1;
 
-            foreach (array_slice($rows, 1) as $row) {
+            DB::beginTransaction();
+            $transactionStarted = true;
+
+            foreach ($dataRows as $row) {
                 $row_num++;
                 
-                // Skip empty rows
-                if (empty($row[0])) continue;
+                // Kolom NO boleh kosong; lewati hanya baris yang seluruh kolomnya kosong.
+                if ($this->isImportRowEmpty($row)) {
+                    continue;
+                }
+
+                $fileRows++;
 
                 try {
-                    // Extract data sesuai column mapping
-                    $nik_ktp = trim($row[$columnMap['nik_ktp'] ?? 0] ?? '');
-                    
-                    // Generate NIK dari NIK KTP jika tidak ada NIK terpisah
-                    // NIK akan digunakan sebagai identifier unik di database
-                    $nik = $nik_ktp; // Use NIK KTP as primary key
-
-                    if (!preg_match('/^[0-9]{16}$/', $nik)) {
-                        // Get detail untuk error message
-                        $nama_ktp = trim($row[$columnMap['nama_ktp'] ?? 0] ?? '') ?: '-';
-                        $posisi = trim($row[$columnMap['posisi'] ?? 0] ?? '') ?: '-';
-                        $penempatan = trim($row[$columnMap['penempatan'] ?? 0] ?? '') ?: '-';
-                        $errors[] = "Baris $row_num: NIK KTP harus 16 angka (NIK: $nik, Nama: $nama_ktp, Posisi: $posisi, Penempatan: $penempatan)";
-                        continue;
-                    }
+                    [$nik, $nik_ktp] = $this->extractImportIdentity($row, $columnMap);
+                    $this->ensureUniqueImportIdentity($nik, $row_num, $seenNiks);
 
                     $rawData = $this->buildRowData($nik, $nik_ktp, $row, $columnMap);
-
-                    // Remove empty strings, keep only non-empty values
-                    $dataToUpdate = [];
-                    foreach ($rawData as $key => $val) {
-                        if ($val !== '' || in_array($key, ['nik', 'nik_ktp'])) {
-                            $dataToUpdate[$key] = $val ?: null;
-                        }
-                    }
+                    $dataToUpdate = $this->filterImportData($rawData);
 
                     // Check if employee exists by NIK
-                    $existing = Employee::find($nik);
+                    $existing = $existingEmployees->get($nik);
                     if ($existing) {
                         // Calculate changes
                         $changes = [];
-                        foreach (array_keys($rawData) as $field) {
-                            $newVal = $rawData[$field];
+                        foreach ($dataToUpdate as $field => $newVal) {
                             $dbVal = (string)($existing->getAttribute($field) ?? '');
                             $newValStr = (string)($newVal ?? '');
                             
@@ -1117,11 +1139,12 @@ class EmployeeController extends Controller
                     } else {
                         // Create new employee
                         $newEmployee = Employee::create($dataToUpdate);
+                        $existingEmployees->put($nik, $newEmployee);
                         
                         $created[] = [
                             'nik' => $newEmployee->nik,
                             'nama' => $newEmployee->nama_lengkap,
-                            'kode_vendor' => $newEmployee->kode_vendor,
+                            'klien' => $newEmployee->klien,
                             'posisi' => $newEmployee->posisi,
                             'type_lokasi' => $newEmployee->type_lokasi,
                             'penempatan' => $newEmployee->penempatan,
@@ -1136,6 +1159,10 @@ class EmployeeController extends Controller
                     
                     $imported++;
                 } catch (\Exception $e) {
+                    if (str_starts_with($e->getMessage(), 'NIK KTP duplikat')) {
+                        $duplicateCount++;
+                    }
+
                     // Add row detail untuk context
                     $nama_ktp = trim($row[$columnMap['nama_ktp'] ?? 0] ?? '') ?: '-';
                     $posisi = trim($row[$columnMap['posisi'] ?? 0] ?? '') ?: '-';
@@ -1158,15 +1185,25 @@ class EmployeeController extends Controller
                     ]
                 );
 
+                DB::commit();
+                $transactionStarted = false;
+
                 return response()->json([
                     'success' => true,
-                    'message' => "Berhasil import $imported data karyawan",
+                    'message' => "Selesai memproses $fileRows baris: $imported berhasil dan " . count($errors) . " gagal",
+                    'file_rows' => $fileRows,
+                    'imported_count' => $imported,
                     'created_count' => count($created),
                     'updated_count' => count($updated),
                     'error_count' => count($errors),
+                    'duplicate_count' => $duplicateCount,
+                    'error_samples' => array_slice($errors, 0, 20),
                     'redirect' => route('employee.index')
                 ], 200);
             }
+
+            DB::rollBack();
+            $transactionStarted = false;
 
             return response()->json([
                 'success' => false,
@@ -1174,11 +1211,19 @@ class EmployeeController extends Controller
             ], 400);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($transactionStarted) {
+                DB::rollBack();
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Validasi gagal: ' . implode(', ', array_merge(...array_values($e->errors())))
             ], 422);
         } catch (\Exception $e) {
+            if ($transactionStarted) {
+                DB::rollBack();
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal import file: ' . $e->getMessage()
@@ -1204,7 +1249,7 @@ class EmployeeController extends Controller
             'nama_ktp' => ['NAMA SESUAI KTP', 'NAMA KTP', 'NAMA'],
             'nik_enlulu' => ['NIK ENLULU', 'NIK SEMENTARA ENLULU', 'ENLULU NIK'],
             'nik_os' => ['NIK OS', 'NIK OUTSOURCING', 'NIK CLIENT'],
-            'kode_vendor' => ['KODE VENDOR', 'VENDOR'],
+            'klien' => ['KLIEN', 'CLIENT'],
             'nama_customer' => ['NAMA CUSTOMER', 'CUSTOMER'],
             'posisi' => ['JABATAN', 'POSISI'],
             'penempatan' => ['LOKASI KERJA', 'PENEMPATAN', 'LOKASI'],
@@ -1271,8 +1316,8 @@ class EmployeeController extends Controller
             }
         }
 
-        // Require at least NIK KTP
-        if ($mapping['nik_ktp'] === null) {
+        // Identitas minimum yang wajib tersedia pada template import.
+        if ($mapping['nik_ktp'] === null || $mapping['nama_ktp'] === null) {
             return null;
         }
 
@@ -1286,7 +1331,7 @@ class EmployeeController extends Controller
     private function importableFields(): array
     {
         return [
-            'nama_ktp', 'nik_enlulu', 'nik_os', 'kode_vendor', 'nama_customer', 'posisi', 'penempatan',
+            'nama_ktp', 'nik_enlulu', 'nik_os', 'klien', 'nama_customer', 'posisi', 'penempatan',
             'type_lokasi', 'area_kerja', 'no_rekening', 'nama_bank', 'nama_di_rekening',
             'status', 'note1',
             // A. Biodata
@@ -1319,13 +1364,209 @@ class EmployeeController extends Controller
             if ($field === 'posisi') {
                 $value = $this->normalizePosition($value);
             }
-            if ($field === 'status') {
-                $value = $value ?: 'Aktif';
+            if ($field === 'jenis_kelamin') {
+                $value = $this->normalizeGender($value);
+            }
+            if ($field === 'status' && $value !== '') {
+                $normalizedStatus = Employee::normalizeStatusValue($value);
+                if ($normalizedStatus === null) {
+                    throw new \InvalidArgumentException("Status kerja tidak valid: '$value'");
+                }
+                $value = $normalizedStatus;
+            }
+            if (in_array($field, $this->importDateFields(), true)) {
+                $value = $this->normalizeImportDate($value, $field);
             }
             $data[$field] = $value;
         }
 
         return $data;
+    }
+
+    /**
+     * Ambil dan validasi identitas minimum untuk setiap baris import.
+     */
+    private function extractImportIdentity(array $row, array $columnMap): array
+    {
+        $nikKtp = trim($row[$columnMap['nik_ktp']] ?? '');
+        $namaKtp = trim($row[$columnMap['nama_ktp']] ?? '');
+
+        if (!preg_match('/^[0-9]{16}$/', $nikKtp)) {
+            throw new \InvalidArgumentException('NIK KTP harus 16 angka (NIK: '.$nikKtp.')');
+        }
+
+        if ($namaKtp === '') {
+            throw new \InvalidArgumentException('Nama sesuai KTP wajib diisi');
+        }
+
+        return [$nikKtp, $nikKtp];
+    }
+
+    /**
+     * Pastikan satu NIK hanya diproses sekali dalam satu file import.
+     */
+    private function ensureUniqueImportIdentity(string $nik, int $rowNumber, array &$seenNiks): void
+    {
+        if (isset($seenNiks[$nik])) {
+            throw new \InvalidArgumentException(
+                "NIK KTP duplikat dengan baris {$seenNiks[$nik]} (NIK: $nik)"
+            );
+        }
+
+        $seenNiks[$nik] = $rowNumber;
+    }
+
+    /**
+     * Ambil seluruh employee existing dalam satu query untuk menghindari query per baris.
+     */
+    private function existingEmployeesForImport(array $rows, array $columnMap)
+    {
+        $niks = [];
+
+        foreach ($rows as $row) {
+            if ($this->isImportRowEmpty($row)) {
+                continue;
+            }
+
+            try {
+                [$nik] = $this->extractImportIdentity($row, $columnMap);
+                $niks[$nik] = true;
+            } catch (\Exception) {
+                // Error identitas tetap dilaporkan oleh loop validasi/import utama.
+            }
+        }
+
+        if (empty($niks)) {
+            return collect();
+        }
+
+        return Employee::query()
+            ->whereIn('nik', array_keys($niks))
+            ->get()
+            ->keyBy('nik');
+    }
+
+    /**
+     * Kolom kosong tidak boleh menghapus data lama saat import pembaruan.
+     */
+    private function filterImportData(array $rawData): array
+    {
+        return array_filter(
+            $rawData,
+            fn ($value, $field) => $value !== '' || in_array($field, ['nik', 'nik_ktp'], true),
+            ARRAY_FILTER_USE_BOTH
+        );
+    }
+
+    private function isImportRowEmpty(array $row): bool
+    {
+        foreach ($row as $value) {
+            if (trim((string) $value) !== '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function normalizeGender(?string $gender): string
+    {
+        $value = trim((string) $gender);
+        $key = preg_replace('/[^A-Z]/', '', strtoupper($value));
+
+        return match ($key) {
+            'LAKILAKI', 'PRIA' => 'Pria',
+            'PEREMPUAN', 'WANITA' => 'Wanita',
+            default => $value,
+        };
+    }
+
+    private function normalizeRequestStatus(Request $request): void
+    {
+        if (!$request->exists('status') || trim((string) $request->input('status')) === '') {
+            return;
+        }
+
+        $normalized = Employee::normalizeStatusValue($request->input('status'));
+        if ($normalized !== null) {
+            $request->merge(['status' => $normalized]);
+        }
+    }
+
+    private function importDateFields(): array
+    {
+        return [
+            'tanggal_lahir',
+            'tanggal_masuk',
+            'tanggal_keluar',
+            'tanggal_perpanjangan_terakhir',
+        ];
+    }
+
+    /**
+     * Ubah tanggal dari serial Excel, format angka, atau nama bulan Indonesia.
+     */
+    private function normalizeImportDate(string $value, string $field): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        if (is_numeric($value)) {
+            try {
+                return ExcelDate::excelToDateTimeObject((float) $value)->format('Y-m-d');
+            } catch (\Throwable) {
+                throw new \InvalidArgumentException(
+                    "Format tanggal tidak valid pada {$this->importDateLabel($field)}: '$value'"
+                );
+            }
+        }
+
+        $normalized = strtoupper(preg_replace('/\s+/', ' ', $value) ?? $value);
+        $normalized = strtr($normalized, [
+            'JANUARI' => 'JANUARY',
+            'FEBRUARI' => 'FEBRUARY',
+            'MARET' => 'MARCH',
+            'MEI' => 'MAY',
+            'JUNI' => 'JUNE',
+            'JULI' => 'JULY',
+            'AGUSTUS' => 'AUGUST',
+            'OKTOBER' => 'OCTOBER',
+            'DESEMBER' => 'DECEMBER',
+        ]);
+
+        foreach ([
+            '!d F Y', '!j F Y', '!d M Y', '!j M Y',
+            '!d-m-Y', '!j-n-Y', '!d/m/Y', '!j/n/Y',
+            '!Y-m-d', '!Y/m/d',
+            '!d-m-y', '!j-n-y', '!d/m/y', '!j/n/y',
+            '!Y-m-d H:i:s', '!d-m-Y H:i:s', '!d/m/Y H:i:s',
+        ] as $format) {
+            $date = \DateTimeImmutable::createFromFormat($format, $normalized);
+            $errors = \DateTimeImmutable::getLastErrors();
+            $hasErrors = is_array($errors)
+                && ($errors['warning_count'] > 0 || $errors['error_count'] > 0);
+
+            if ($date instanceof \DateTimeImmutable && !$hasErrors) {
+                return $date->format('Y-m-d');
+            }
+        }
+
+        throw new \InvalidArgumentException(
+            "Format tanggal tidak dikenali pada {$this->importDateLabel($field)}: '$value'"
+        );
+    }
+
+    private function importDateLabel(string $field): string
+    {
+        return match ($field) {
+            'tanggal_lahir' => 'TANGGAL LAHIR',
+            'tanggal_masuk' => 'TANGGAL MASUK',
+            'tanggal_keluar' => 'TANGGAL KELUAR',
+            'tanggal_perpanjangan_terakhir' => 'TANGGAL PERPANJANGAN TERAKHIR',
+            default => strtoupper(str_replace('_', ' ', $field)),
+        };
     }
 
     /**
@@ -1374,7 +1615,7 @@ class EmployeeController extends Controller
 
             // E. Penempatan Kerja
             ['NAMA CUSTOMER', 'nama_customer'],
-            ['KODE VENDOR', 'kode_vendor'],
+            ['KLIEN', 'klien'],
             ['JABATAN', 'posisi'],
             ['TYPE LOKASI', 'type_lokasi'],
             ['LOKASI KERJA', 'penempatan'],
@@ -1486,8 +1727,8 @@ class EmployeeController extends Controller
                 $row = array_replace(array_fill(0, $maxColumn + 1, ''), $row);
             }
             
-            // Include ALL rows (header + data) if not empty
-            if (!empty($row[0]) || count($rows) === 0) {
+            // Kolom pertama (NO) boleh kosong selama ada data pada kolom lain.
+            if (count($rows) === 0 || !$this->isImportRowEmpty($row)) {
                 $rows[] = $row;
             }
         }

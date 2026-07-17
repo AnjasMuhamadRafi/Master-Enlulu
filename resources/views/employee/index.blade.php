@@ -223,7 +223,7 @@
                     <th style="width: 50px;">NO</th>
                     <th>NIK KTP</th>
                     <th>NAMA KTP</th>
-                    <th>KODE VENDOR</th>
+                    <th>KLIEN</th>
                     <th>JABATAN</th>
                     <th>TYPE LOKASI</th>
                     <th>LOKASI KERJA</th>
@@ -244,7 +244,7 @@
                     <td><strong>{{ ($employees->currentPage() - 1) * $employees->perPage() + $key + 1 }}</strong></td>
                     <td><strong>{{ $emp->nik_ktp ?? '-' }}</strong></td>
                     <td>{{ $emp->nama_ktp ?? '-' }}</td>
-                    <td>{{ $emp->kode_vendor ?? '-' }}</td>
+                    <td>{{ $emp->klien ?? '-' }}</td>
                     <td>{{ $emp->posisi ?? '-' }}</td>
                     <td>{{ $emp->type_lokasi ?? '-' }}</td>
                     <td>{{ $emp->penempatan ?? '-' }}</td>
