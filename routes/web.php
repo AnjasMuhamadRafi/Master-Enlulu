@@ -7,6 +7,8 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingsUserController;
 use App\Http\Controllers\BpuTkController;
 use App\Http\Controllers\LogController;
+use App\Http\Controllers\ContractController;
+use App\Http\Controllers\PublicEmployeeRegistrationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +27,14 @@ Route::get('/', function () {
     }
     return redirect()->route('login');
 });
+
+Route::get('/pendaftaran-karyawan', [PublicEmployeeRegistrationController::class, 'create'])
+    ->name('public.employee-registration');
+Route::post('/pendaftaran-karyawan', [PublicEmployeeRegistrationController::class, 'store'])
+    ->middleware('throttle:10,1')
+    ->name('public.employee-registration.store');
+Route::get('/pendaftaran-karyawan/berhasil', [PublicEmployeeRegistrationController::class, 'success'])
+    ->name('public.employee-registration.success');
 
 // Authentication Routes
 Route::middleware('guest')->group(function () {
@@ -71,12 +81,13 @@ Route::middleware('auth')->group(function () {
     
     // Contract Management
     Route::prefix('contract')->name('contract.')->group(function () {
-        Route::get('/', function () { return view('contract.index'); })->name('index');
-        Route::get('/create', function () { return view('contract.create'); })->name('create');
-        Route::post('/', function () { return back(); })->name('store');
-        Route::get('/{id}/edit', function () { return view('contract.edit'); })->name('edit');
-        Route::put('/{id}', function () { return back(); })->name('update');
-        Route::delete('/{id}', function () { return back(); })->name('destroy');
+        Route::get('/', [ContractController::class, 'index'])->name('index');
+        Route::get('/create', [ContractController::class, 'create'])->name('create');
+        Route::post('/', [ContractController::class, 'store'])->name('store');
+        Route::get('/{contract}/download', [ContractController::class, 'download'])->name('download');
+        Route::get('/{contract}/edit', [ContractController::class, 'edit'])->name('edit');
+        Route::put('/{contract}', [ContractController::class, 'update'])->name('update');
+        Route::delete('/{contract}', [ContractController::class, 'destroy'])->name('destroy');
         Route::get('/template', function () { return view('contract.template'); })->name('template');
     });
     

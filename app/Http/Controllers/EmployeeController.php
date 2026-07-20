@@ -3,8 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
+use App\Models\Contract;
 use App\Models\Employee;
 use App\Models\User;
+use App\Services\ContractDocumentService;
+use App\Services\PksNumberService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -347,7 +351,41 @@ class EmployeeController extends Controller
         }
 
         $oldValues = $employee->getAttributes();
-        $employee->update($validated);
+        $becomingActive = ($oldValues['status'] ?? null) !== 'Aktif'
+            && ($validated['status'] ?? null) === 'Aktif';
+
+        DB::transaction(function () use ($employee, &$validated, $becomingActive): void {
+            if ($becomingActive && empty($employee->no_pks_masuk)) {
+                $activationDate = !empty($validated['tanggal_masuk'])
+                    ? Carbon::parse($validated['tanggal_masuk'])
+                    : ($employee->tanggal_masuk ?: now());
+
+                if (empty($validated['tanggal_masuk']) && !$employee->tanggal_masuk) {
+                    $validated['tanggal_masuk'] = $activationDate->format('Y-m-d');
+                }
+
+                $validated['no_pks_masuk'] = app(PksNumberService::class)->next($activationDate);
+            }
+
+            $employee->update($validated);
+            $employee->refresh();
+
+            if ($becomingActive && $employee->no_pks_masuk) {
+                Contract::firstOrCreate(
+                    [
+                        'employee_nik' => $employee->nik,
+                        'contract_number' => $employee->no_pks_masuk,
+                    ],
+                    [
+                        'contract_date' => $employee->tanggal_masuk ?: now(),
+                        'start_date' => $employee->tanggal_masuk ?: now(),
+                        'end_date' => $employee->tanggal_keluar,
+                        'template_name' => ContractDocumentService::TEMPLATE_NAME,
+                        'created_by' => auth()->id(),
+                    ]
+                );
+            }
+        });
         
         // Log aktivitas
         ActivityLog::log(

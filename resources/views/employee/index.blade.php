@@ -10,6 +10,9 @@
             <h1 class="h3 text-dark"><i class="bi bi-people" style="color: #FF6B35; margin-right: 8px;"></i> Data Karyawan</h1>
         </div>
         <div class="col-auto">
+            <a href="{{ route('public.employee-registration') }}" class="btn btn-dark" target="_blank" title="Buka form pendaftaran calon karyawan">
+                <i class="bi bi-link-45deg"></i> Form Publik
+            </a>
             <a href="{{ route('employee.create') }}" class="btn btn-primary">
                 <i class="bi bi-person-plus"></i> Tambah Karyawan
             </a>
