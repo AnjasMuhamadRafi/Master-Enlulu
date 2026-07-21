@@ -25,6 +25,10 @@
                 <ul class="submenu" id="employee-submenu">
                     <li><a href="{{ route('employee.index') }}"><i class="bi bi-list"></i><span class="menu-text">Daftar Karyawan</span></a></li>
                     <li><a href="{{ route('employee.bpu-tk') }}"><i class="bi bi-shield-plus"></i><span class="menu-text">BPU TK</span></a></li>
+                    @if(auth()->check() && in_array(auth()->user()->role, ['Super Admin', 'Admin'], true))
+                        <li><a href="{{ route('public.employee-registration') }}" target="_blank"><i class="bi bi-person-plus"></i><span class="menu-text">Form Pendaftaran</span></a></li>
+                        <li><a href="{{ route('candidate-registration.index') }}"><i class="bi bi-ui-checks-grid"></i><span class="menu-text">Kelengkapan Data</span></a></li>
+                    @endif
                     <li><a href="{{ route('employee.create') }}"><i class="bi bi-plus-circle"></i><span class="menu-text">Tambah Karyawan</span></a></li>
                     <li><a href="{{ route('employee.import') }}"><i class="bi bi-file-earmark-excel"></i><span class="menu-text">Import Excel</span></a></li>
                 </ul>

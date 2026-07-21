@@ -9,6 +9,8 @@ use App\Http\Controllers\BpuTkController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\ContractController;
 use App\Http\Controllers\PublicEmployeeRegistrationController;
+use App\Http\Controllers\CandidateRegistrationController;
+use App\Http\Controllers\CandidateCompletenessController;
 
 /*
 |--------------------------------------------------------------------------
@@ -36,6 +38,14 @@ Route::post('/pendaftaran-karyawan', [PublicEmployeeRegistrationController::clas
 Route::get('/pendaftaran-karyawan/berhasil', [PublicEmployeeRegistrationController::class, 'success'])
     ->name('public.employee-registration.success');
 
+Route::get('/lengkapi-data', [CandidateCompletenessController::class, 'show'])
+    ->name('public.candidate-registration.show');
+Route::post('/lengkapi-data', [CandidateCompletenessController::class, 'store'])
+    ->middleware('throttle:10,1')
+    ->name('public.candidate-registration.store');
+Route::get('/lengkapi-data/berhasil', [CandidateCompletenessController::class, 'success'])
+    ->name('public.candidate-registration.success');
+
 // Authentication Routes
 Route::middleware('guest')->group(function () {
     Route::get('/login', function () { return view('auth.login'); })->name('login');
@@ -48,6 +58,15 @@ Route::post('/logout', [App\Http\Controllers\Auth\LoginController::class, 'logou
 Route::middleware('auth')->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::middleware('admin')->prefix('candidate-registration')->name('candidate-registration.')->group(function () {
+        Route::get('/', [CandidateRegistrationController::class, 'index'])->name('index');
+        Route::get('/export', [CandidateRegistrationController::class, 'export'])->name('export');
+        Route::get('/{candidateRegistration}', [CandidateRegistrationController::class, 'show'])->name('show');
+        Route::post('/{candidateRegistration}/apply', [CandidateRegistrationController::class, 'apply'])->name('apply');
+        Route::get('/{candidateRegistration}/document/{document}', [CandidateRegistrationController::class, 'download'])->name('download');
+        Route::delete('/{candidateRegistration}', [CandidateRegistrationController::class, 'destroy'])->name('destroy');
+    });
     
     // Employee Management
     Route::prefix('employee')->name('employee.')->group(function () {
@@ -73,6 +92,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [EmployeeController::class, 'index'])->name('index');
         Route::get('/create', [EmployeeController::class, 'create'])->name('create');
         Route::post('/', [EmployeeController::class, 'store'])->name('store');
+        Route::get('/{employee}/document/{document}', [EmployeeController::class, 'downloadDocument'])->name('document.download');
         Route::get('/{employee}', [EmployeeController::class, 'show'])->name('show');
         Route::get('/{employee}/edit', [EmployeeController::class, 'edit'])->name('edit');
         Route::put('/{employee}', [EmployeeController::class, 'update'])->name('update');

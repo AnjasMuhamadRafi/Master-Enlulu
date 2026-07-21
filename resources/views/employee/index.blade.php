@@ -10,9 +10,14 @@
             <h1 class="h3 text-dark"><i class="bi bi-people" style="color: #FF6B35; margin-right: 8px;"></i> Data Karyawan</h1>
         </div>
         <div class="col-auto">
-            <a href="{{ route('public.employee-registration') }}" class="btn btn-dark" target="_blank" title="Buka form pendaftaran calon karyawan">
-                <i class="bi bi-link-45deg"></i> Form Publik
-            </a>
+            @if(auth()->check() && in_array(auth()->user()->role, ['Super Admin', 'Admin'], true))
+                <a href="{{ route('public.employee-registration') }}" class="btn btn-outline-dark" target="_blank" title="Buka form pendaftaran karyawan baru">
+                    <i class="bi bi-person-plus"></i> Form Pendaftaran
+                </a>
+                <a href="{{ route('candidate-registration.index') }}" class="btn btn-dark" title="Kelola link kelengkapan data kandidat">
+                    <i class="bi bi-ui-checks-grid"></i> Kelengkapan Data
+                </a>
+            @endif
             <a href="{{ route('employee.create') }}" class="btn btn-primary">
                 <i class="bi bi-person-plus"></i> Tambah Karyawan
             </a>

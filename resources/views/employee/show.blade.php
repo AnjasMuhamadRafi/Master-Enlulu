@@ -48,6 +48,7 @@
                     <div class="col-md-6"><dl class="row mb-0">
                         <dt class="col-sm-5">NIK KTP</dt><dd class="col-sm-7">{{ $val($employee->nik_ktp) }}</dd>
                         <dt class="col-sm-5">Nama Sesuai KTP</dt><dd class="col-sm-7">{{ $val($employee->nama_ktp) }}</dd>
+                        <dt class="col-sm-5">Nama Ibu Kandung</dt><dd class="col-sm-7">{{ $val($employee->nama_ibu_kandung) }}</dd>
                         <dt class="col-sm-5">NIK ENLULU</dt><dd class="col-sm-7">{{ $val($employee->nik_enlulu) }}</dd>
                         <dt class="col-sm-5">NIK OS</dt><dd class="col-sm-7">{{ $val($employee->nik_os) }}</dd>
                         <dt class="col-sm-5">Tempat Lahir</dt><dd class="col-sm-7">{{ $val($employee->tempat_lahir) }}</dd>
@@ -112,6 +113,34 @@
                     <div class="col-md-6"><dl class="row mb-0">
                         <dt class="col-sm-5">Nama Pemilik Rekening</dt><dd class="col-sm-7">{{ $val($employee->nama_di_rekening) }}</dd>
                     </dl></div>
+                </div>
+            </div>
+        </div>
+
+        {{-- D. DOKUMEN --}}
+        <div class="card mb-4">
+            <div class="card-header bg-light"><strong>D. Dokumen Karyawan</strong></div>
+            <div class="card-body">
+                <div class="row g-2">
+                    @php
+                        $documents = [
+                            'ktp' => ['KTP', $employee->dokumen_ktp],
+                            'kk' => ['KK', $employee->dokumen_kk],
+                            'ijazah' => ['Ijazah', $employee->dokumen_ijazah],
+                            'cv' => ['CV & Surat Lamaran', $employee->dokumen_cv],
+                        ];
+                    @endphp
+                    @foreach($documents as $key => [$label, $path])
+                        <div class="col-md-4">
+                            @if($path)
+                                <a href="{{ route('employee.document.download', [$employee, $key]) }}" class="btn btn-outline-primary w-100">
+                                    <i class="bi bi-download"></i> {{ $label }}
+                                </a>
+                            @else
+                                <button class="btn btn-outline-secondary w-100" disabled><i class="bi bi-file-earmark-x"></i> {{ $label }}</button>
+                            @endif
+                        </div>
+                    @endforeach
                 </div>
             </div>
         </div>

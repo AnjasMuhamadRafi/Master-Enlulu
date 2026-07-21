@@ -7,6 +7,7 @@ use App\Models\Contract;
 use App\Models\Employee;
 use App\Models\User;
 use App\Services\ContractDocumentService;
+use App\Services\CandidateDocumentService;
 use App\Services\PksNumberService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -285,6 +286,30 @@ class EmployeeController extends Controller
         }
         
         return view('employee.show', compact('employee'));
+    }
+
+    public function downloadDocument(Employee $employee, string $document)
+    {
+        /** @var User|null $user */
+        $user = $this->currentUser();
+        if ($user && $user->isAdminPic() && !$user->canAccessPosition($employee->posisi)) {
+            abort(403, 'Anda tidak memiliki akses ke dokumen karyawan ini.');
+        }
+
+        $documents = [
+            'ktp' => 'dokumen_ktp',
+            'kk' => 'dokumen_kk',
+            'ijazah' => 'dokumen_ijazah',
+            'cv' => 'dokumen_cv',
+            'surat-lamaran' => 'dokumen_surat_lamaran',
+        ];
+
+        abort_unless(array_key_exists($document, $documents), 404);
+
+        $path = $employee->{$documents[$document]};
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
+
+        return app(CandidateDocumentService::class)->download($path);
     }
 
     /**

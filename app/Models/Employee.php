@@ -23,6 +23,7 @@ class Employee extends Model
     protected $fillable = [
         'nik',
         'nik_ktp',
+        'nama_ibu_kandung',
         'nik_enlulu',
         'nik_os',
         'nama_ktp',
@@ -67,6 +68,11 @@ class Employee extends Model
 
         // D. Foto Wajah
         'foto',
+        'dokumen_ktp',
+        'dokumen_kk',
+        'dokumen_ijazah',
+        'dokumen_cv',
+        'dokumen_surat_lamaran',
 
         // E. Penempatan Kerja
         'nama_customer',
