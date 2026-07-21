@@ -64,6 +64,10 @@
                             <input type="text" class="form-control" name="nama_ktp" value="{{ old('nama_ktp') }}" required>
                         </div>
                         <div class="col-md-6">
+                            <label class="form-label required">Nama Ibu Kandung</label>
+                            <input type="text" class="form-control" name="nama_ibu_kandung" value="{{ old('nama_ibu_kandung') }}" required>
+                        </div>
+                        <div class="col-md-6">
                             <label class="form-label required">Tempat Lahir</label>
                             <input type="text" class="form-control" name="tempat_lahir" value="{{ old('tempat_lahir') }}" required>
                         </div>
@@ -80,8 +84,8 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Agama</label>
-                            <select class="form-select" name="agama">
+                            <label class="form-label required">Agama</label>
+                            <select class="form-select" name="agama" required>
                                 <option value="">Pilih agama</option>
                                 @foreach(['Islam', 'Kristen', 'Katholik', 'Budha', 'Hindu', 'Konghucu'] as $option)
                                     <option value="{{ $option }}" @selected(old('agama') === $option)>{{ $option }}</option>
@@ -90,7 +94,7 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Status Pernikahan</label>
-                            <select class="form-select" name="status_pernikahan">
+                            <select class="form-select" name="status_pernikahan" id="status-pernikahan">
                                 <option value="">Pilih status</option>
                                 @foreach(['Single', 'Menikah', 'Duda', 'Janda'] as $option)
                                     <option value="{{ $option }}" @selected(old('status_pernikahan') === $option)>{{ $option }}</option>
@@ -98,8 +102,12 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">No. KK</label>
-                            <input type="text" class="form-control" name="no_kk" value="{{ old('no_kk') }}">
+                            <label class="form-label required">No. KK</label>
+                            <input type="text" inputmode="numeric" pattern="[0-9]{16}" maxlength="16" class="form-control" name="no_kk" value="{{ old('no_kk') }}" required>
+                        </div>
+                        <div class="col-md-6" id="jumlah-anak-wrapper" hidden>
+                            <label class="form-label required">Jumlah Anak</label>
+                            <input type="number" min="0" max="50" class="form-control" name="jumlah_anak" id="jumlah-anak" value="{{ old('jumlah_anak') }}">
                         </div>
                     </div>
 
@@ -116,8 +124,8 @@
                             ['propinsi', 'Provinsi'],
                         ] as [$name, $label])
                             <div class="col-md-6">
-                                <label class="form-label">{{ $label }}</label>
-                                <input type="text" class="form-control" name="{{ $name }}" value="{{ old($name) }}">
+                                <label class="form-label required">{{ $label }}</label>
+                                <input type="text" class="form-control" name="{{ $name }}" value="{{ old($name) }}" required>
                             </div>
                         @endforeach
                         <div class="col-md-6">
@@ -125,8 +133,8 @@
                             <input type="tel" class="form-control" name="no_hp" value="{{ old('no_hp') }}" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Email</label>
-                            <input type="email" class="form-control" name="email" value="{{ old('email') }}">
+                            <label class="form-label required">Email</label>
+                            <input type="email" class="form-control" name="email" value="{{ old('email') }}" required>
                         </div>
                     </div>
 
@@ -139,9 +147,9 @@
 
                     <h2 class="section-title">Rekening Bank</h2>
                     <div class="row g-3">
-                        <div class="col-md-4"><label class="form-label">Nama Bank</label><input type="text" class="form-control" name="nama_bank" value="{{ old('nama_bank') }}"></div>
-                        <div class="col-md-4"><label class="form-label">No. Rekening</label><input type="text" class="form-control" name="no_rekening" value="{{ old('no_rekening') }}"></div>
-                        <div class="col-md-4"><label class="form-label">Nama Pemilik Rekening</label><input type="text" class="form-control" name="nama_di_rekening" value="{{ old('nama_di_rekening') }}"></div>
+                        <div class="col-md-4"><label class="form-label required">Nama Bank</label><input type="text" class="form-control" name="nama_bank" value="{{ old('nama_bank') }}" required></div>
+                        <div class="col-md-4"><label class="form-label required">No. Rekening</label><input type="text" class="form-control" name="no_rekening" value="{{ old('no_rekening') }}" required></div>
+                        <div class="col-md-4"><label class="form-label required">Nama Pemilik Rekening</label><input type="text" class="form-control" name="nama_di_rekening" value="{{ old('nama_di_rekening') }}" required></div>
                     </div>
 
                     <h2 class="section-title">Penempatan</h2>
@@ -177,5 +185,24 @@
             </div>
         </div>
     </main>
+    <script>
+        const maritalStatus = document.getElementById('status-pernikahan');
+        const childCountWrapper = document.getElementById('jumlah-anak-wrapper');
+        const childCount = document.getElementById('jumlah-anak');
+        const statusesWithChildren = ['Menikah', 'Duda', 'Janda'];
+
+        function updateChildCountVisibility() {
+            const visible = statusesWithChildren.includes(maritalStatus.value);
+            childCountWrapper.hidden = !visible;
+            childCount.required = visible;
+
+            if (!visible) {
+                childCount.value = '';
+            }
+        }
+
+        maritalStatus.addEventListener('change', updateChildCountVisibility);
+        updateChildCountVisibility();
+    </script>
 </body>
 </html>

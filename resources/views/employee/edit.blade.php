@@ -50,6 +50,11 @@
                             @error('nama_ktp')<span class="invalid-feedback d-block">{{ $message }}</span>@enderror
                         </div>
                         <div class="col-md-6">
+                            <label class="form-label">Nama Ibu Kandung</label>
+                            <input type="text" class="form-control @error('nama_ibu_kandung') is-invalid @enderror" name="nama_ibu_kandung" value="{{ old('nama_ibu_kandung', $employee->nama_ibu_kandung) }}">
+                            @error('nama_ibu_kandung')<span class="invalid-feedback d-block">{{ $message }}</span>@enderror
+                        </div>
+                        <div class="col-md-6">
                             <label class="form-label">NIK ENLULU</label>
                             <input type="text" class="form-control @error('nik_enlulu') is-invalid @enderror" name="nik_enlulu" placeholder="NIK sementara dari PT Enlulu" value="{{ old('nik_enlulu', $employee->nik_enlulu) }}">
                             <small class="form-text text-muted">NIK sementara yang diterbitkan PT Enlulu</small>
@@ -233,8 +238,8 @@
                         </div>
                     </div>
 
-                    {{-- ============ D. FOTO WAJAH ============ --}}
-                    <h6 class="section-title">D. Foto Wajah</h6>
+                    {{-- ============ D. FOTO DAN DOKUMEN ============ --}}
+                    <h6 class="section-title">D. Foto dan Dokumen Karyawan</h6>
                     <div class="row g-3 align-items-center">
                         @if ($employee->foto)
                             <div class="col-auto">
@@ -247,6 +252,36 @@
                             <small class="form-text text-muted">Kosongkan jika tidak ingin mengganti. Semua format gambar (JPG/PNG/WebP/BMP), maks. 10 MB &mdash; otomatis dikonversi ke JPG terkompresi</small>
                             @error('foto')<span class="invalid-feedback d-block">{{ $message }}</span>@enderror
                         </div>
+                    </div>
+
+                    <div class="row g-3 mt-2">
+                        @foreach([
+                            ['file_ktp', 'KTP', 'ktp', $employee->dokumen_ktp],
+                            ['file_kk', 'KK', 'kk', $employee->dokumen_kk],
+                            ['file_ijazah', 'Ijazah', 'ijazah', $employee->dokumen_ijazah],
+                            ['file_cv_lamaran', 'CV & Surat Lamaran', 'cv', $employee->dokumen_cv],
+                        ] as [$input, $label, $documentKey, $currentPath])
+                            <div class="col-md-6">
+                                <label class="form-label">{{ $label }}</label>
+                                @if($currentPath)
+                                    <div class="mb-2">
+                                        <a href="{{ route('employee.document.download', [$employee, $documentKey]) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-download"></i> Unduh dokumen saat ini
+                                        </a>
+                                    </div>
+                                @else
+                                    <div class="text-muted small mb-2">Belum ada dokumen.</div>
+                                @endif
+                                <input type="file"
+                                       class="form-control @error($input) is-invalid @enderror"
+                                       name="{{ $input }}"
+                                       accept=".jpg,.jpeg,.png,.pdf,.doc,.docx">
+                                <small class="form-text text-muted">
+                                    Kosongkan jika tidak ingin mengganti. JPG, PNG, PDF, DOC, atau DOCX; maksimal 15 MB sebelum optimasi.
+                                </small>
+                                @error($input)<span class="invalid-feedback d-block">{{ $message }}</span>@enderror
+                            </div>
+                        @endforeach
                     </div>
 
                     {{-- ============ E. PENEMPATAN KERJA ============ --}}

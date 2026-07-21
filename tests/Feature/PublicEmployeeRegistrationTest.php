@@ -15,7 +15,10 @@ class PublicEmployeeRegistrationTest extends TestCase
         $this->get(route('public.employee-registration'))
             ->assertOk()
             ->assertSee('Form Pendaftaran Karyawan Baru')
-            ->assertSee('Kirim Pendaftaran');
+            ->assertSee('Kirim Pendaftaran')
+            ->assertSee('Nama Ibu Kandung')
+            ->assertSee('Jumlah Anak')
+            ->assertSee('id="jumlah-anak-wrapper"', false);
     }
 
     public function test_new_candidate_registration_creates_training_employee(): void
@@ -23,12 +26,22 @@ class PublicEmployeeRegistrationTest extends TestCase
         $response = $this->post(route('public.employee-registration.store'), [
             'nik' => '3174010101010099',
             'nama_ktp' => 'Kandidat Pendaftaran',
+            'nama_ibu_kandung' => 'Ibu Kandidat',
             'tempat_lahir' => 'Jakarta',
             'tanggal_lahir' => '1998-04-04',
             'jenis_kelamin' => 'Pria',
+            'agama' => 'Islam',
             'alamat' => 'Jakarta Selatan',
+            'kelurahan' => 'Kebayoran Lama Selatan',
+            'kecamatan' => 'Kebayoran Lama',
+            'kota' => 'Jakarta Selatan',
+            'propinsi' => 'DKI Jakarta',
             'no_hp' => '081234567899',
             'email' => 'pendaftaran@example.com',
+            'no_kk' => '3174010101010098',
+            'nama_bank' => 'BCA',
+            'no_rekening' => '1234567890',
+            'nama_di_rekening' => 'Kandidat Pendaftaran',
             'consent' => '1',
         ]);
 
@@ -36,6 +49,42 @@ class PublicEmployeeRegistrationTest extends TestCase
 
         $employee = Employee::findOrFail('3174010101010099');
         $this->assertSame('Kandidat Pendaftaran', $employee->nama_lengkap);
+        $this->assertSame('Ibu Kandidat', $employee->nama_ibu_kandung);
         $this->assertSame('Training', $employee->status);
+    }
+
+    public function test_child_count_is_required_for_married_widowed_or_divorced_status(): void
+    {
+        $data = [
+            'nik' => '3174010101010077',
+            'nama_ktp' => 'Kandidat Menikah',
+            'nama_ibu_kandung' => 'Ibu Kandidat',
+            'tempat_lahir' => 'Jakarta',
+            'tanggal_lahir' => '1990-05-05',
+            'jenis_kelamin' => 'Wanita',
+            'agama' => 'Islam',
+            'status_pernikahan' => 'Menikah',
+            'alamat' => 'Jakarta Selatan',
+            'kelurahan' => 'Cilandak Barat',
+            'kecamatan' => 'Cilandak',
+            'kota' => 'Jakarta Selatan',
+            'propinsi' => 'DKI Jakarta',
+            'no_hp' => '081234567877',
+            'email' => 'menikah@example.com',
+            'no_kk' => '3174010101010076',
+            'nama_bank' => 'Mandiri',
+            'no_rekening' => '9876543210',
+            'nama_di_rekening' => 'Kandidat Menikah',
+            'consent' => '1',
+        ];
+
+        $this->post(route('public.employee-registration.store'), $data)
+            ->assertSessionHasErrors('jumlah_anak');
+
+        $this->post(route('public.employee-registration.store'), $data + ['jumlah_anak' => 2])
+            ->assertRedirect(route('public.employee-registration.success'));
+
+        $employee = Employee::findOrFail('3174010101010077');
+        $this->assertSame(2, $employee->jumlah_anak);
     }
 }

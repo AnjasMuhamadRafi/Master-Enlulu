@@ -25,6 +25,12 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 class EmployeeController extends Controller
 {
     private const IMPORT_PREVIEW_LIMIT = 100;
+    private const DOCUMENT_UPLOADS = [
+        'file_ktp' => ['column' => 'dokumen_ktp', 'label' => 'ktp'],
+        'file_kk' => ['column' => 'dokumen_kk', 'label' => 'kk'],
+        'file_ijazah' => ['column' => 'dokumen_ijazah', 'label' => 'ijazah'],
+        'file_cv_lamaran' => ['column' => 'dokumen_cv', 'label' => 'cv-lamaran'],
+    ];
 
     /**
      * Display a listing of the resource.
@@ -153,6 +159,7 @@ class EmployeeController extends Controller
             'nik_enlulu' => 'nullable|string|max:50',
             'nik_os' => 'nullable|string|max:50',
             'nama_ktp' => 'required|string|max:100',
+            'nama_ibu_kandung' => 'nullable|string|max:150',
             'posisi' => 'nullable|string|max:100',
             'penempatan' => 'nullable|string|max:100',
             'type_lokasi' => 'nullable|string|max:50',
@@ -352,6 +359,10 @@ class EmployeeController extends Controller
         $rules = array_merge([
             'nik' => 'required|unique:employees,nik,' . $employee->nik . ',nik|regex:/^[0-9]{16}$/|digits:16',
             'foto' => 'nullable|image|max:10240',
+            'file_ktp' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:15360',
+            'file_kk' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:15360',
+            'file_ijazah' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:15360',
+            'file_cv_lamaran' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:15360',
         ], $this->masterDataRules());
 
         $validated = $request->validate($rules, $this->validationMessages());
@@ -375,42 +386,74 @@ class EmployeeController extends Controller
             unset($validated['foto']);
         }
 
+        $newDocumentPaths = [];
+        $oldDocumentPaths = [];
+        foreach (self::DOCUMENT_UPLOADS as $input => $document) {
+            unset($validated[$input]);
+
+            if (!$request->hasFile($input)) {
+                continue;
+            }
+
+            $column = $document['column'];
+            $path = app(CandidateDocumentService::class)->store(
+                $request->file($input),
+                'employee_documents/' . $validated['nik'],
+                $document['label']
+            );
+
+            $validated[$column] = $path;
+            $newDocumentPaths[] = $path;
+
+            if ($employee->{$column}) {
+                $oldDocumentPaths[] = $employee->{$column};
+            }
+        }
+
         $oldValues = $employee->getAttributes();
         $becomingActive = ($oldValues['status'] ?? null) !== 'Aktif'
             && ($validated['status'] ?? null) === 'Aktif';
 
-        DB::transaction(function () use ($employee, &$validated, $becomingActive): void {
-            if ($becomingActive && empty($employee->no_pks_masuk)) {
-                $activationDate = !empty($validated['tanggal_masuk'])
-                    ? Carbon::parse($validated['tanggal_masuk'])
-                    : ($employee->tanggal_masuk ?: now());
+        try {
+            DB::transaction(function () use ($employee, &$validated, $becomingActive): void {
+                if ($becomingActive && empty($employee->no_pks_masuk)) {
+                    $activationDate = !empty($validated['tanggal_masuk'])
+                        ? Carbon::parse($validated['tanggal_masuk'])
+                        : ($employee->tanggal_masuk ?: now());
 
-                if (empty($validated['tanggal_masuk']) && !$employee->tanggal_masuk) {
-                    $validated['tanggal_masuk'] = $activationDate->format('Y-m-d');
+                    if (empty($validated['tanggal_masuk']) && !$employee->tanggal_masuk) {
+                        $validated['tanggal_masuk'] = $activationDate->format('Y-m-d');
+                    }
+
+                    $validated['no_pks_masuk'] = app(PksNumberService::class)->next($activationDate);
                 }
 
-                $validated['no_pks_masuk'] = app(PksNumberService::class)->next($activationDate);
-            }
+                $employee->update($validated);
+                $employee->refresh();
 
-            $employee->update($validated);
-            $employee->refresh();
+                if ($becomingActive && $employee->no_pks_masuk) {
+                    Contract::firstOrCreate(
+                        [
+                            'employee_nik' => $employee->nik,
+                            'contract_number' => $employee->no_pks_masuk,
+                        ],
+                        [
+                            'contract_date' => $employee->tanggal_masuk ?: now(),
+                            'start_date' => $employee->tanggal_masuk ?: now(),
+                            'end_date' => $employee->tanggal_keluar,
+                            'template_name' => ContractDocumentService::TEMPLATE_NAME,
+                            'created_by' => auth()->id(),
+                        ]
+                    );
+                }
+            });
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($newDocumentPaths);
 
-            if ($becomingActive && $employee->no_pks_masuk) {
-                Contract::firstOrCreate(
-                    [
-                        'employee_nik' => $employee->nik,
-                        'contract_number' => $employee->no_pks_masuk,
-                    ],
-                    [
-                        'contract_date' => $employee->tanggal_masuk ?: now(),
-                        'start_date' => $employee->tanggal_masuk ?: now(),
-                        'end_date' => $employee->tanggal_keluar,
-                        'template_name' => ContractDocumentService::TEMPLATE_NAME,
-                        'created_by' => auth()->id(),
-                    ]
-                );
-            }
-        });
+            throw $exception;
+        }
+
+        Storage::disk('local')->delete($oldDocumentPaths);
         
         // Log aktivitas
         ActivityLog::log(
