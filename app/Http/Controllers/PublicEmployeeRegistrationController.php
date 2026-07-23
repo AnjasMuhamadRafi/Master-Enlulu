@@ -11,7 +11,7 @@ class PublicEmployeeRegistrationController extends Controller
 {
     public function create()
     {
-        $positions = config('positions.operational_positions', []);
+        $positions = $this->positionOptions();
 
         return view('public.employee-registration', compact('positions'));
     }
@@ -22,7 +22,6 @@ class PublicEmployeeRegistrationController extends Controller
             abort(422);
         }
 
-        $positions = config('positions.operational_positions', []);
         $validated = $request->validate([
             'nik' => ['required', 'digits:16', 'unique:employees,nik'],
             'nama_ktp' => ['required', 'string', 'max:100'],
@@ -47,7 +46,7 @@ class PublicEmployeeRegistrationController extends Controller
             'nama_bank' => ['required', 'string', 'max:50'],
             'no_rekening' => ['required', 'string', 'max:30'],
             'nama_di_rekening' => ['required', 'string', 'max:100'],
-            'posisi' => ['nullable', Rule::in($positions)],
+            'posisi' => ['nullable', 'string', 'max:100'],
             'nama_customer' => ['nullable', 'string', 'max:150'],
             'tanggal_masuk' => ['nullable', 'date'],
             'foto' => ['nullable', 'image', 'max:10240'],
@@ -92,5 +91,23 @@ class PublicEmployeeRegistrationController extends Controller
     public function success()
     {
         return view('public.employee-registration-success');
+    }
+
+    private function positionOptions(): array
+    {
+        return collect(config('positions.operational_positions', []))
+            ->merge(
+                Employee::query()
+                    ->whereNotNull('posisi')
+                    ->where('posisi', 'not like', 'ADMIN/PIC-%')
+                    ->distinct()
+                    ->pluck('posisi')
+            )
+            ->map(fn ($p) => trim(strtoupper((string) $p)))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
     }
 }

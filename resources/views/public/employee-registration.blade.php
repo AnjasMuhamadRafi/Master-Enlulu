@@ -156,12 +156,14 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Posisi</label>
-                            <select class="form-select" name="posisi">
-                                <option value="">Pilih jika sudah diinformasikan</option>
+                            <input type="text" class="form-control" name="posisi" list="posisi-options"
+                                   placeholder="Pilih atau ketik posisi"
+                                   value="{{ old('posisi') }}">
+                            <datalist id="posisi-options">
                                 @foreach($positions as $position)
-                                    <option value="{{ $position }}" @selected(old('posisi') === $position)>{{ $position }}</option>
+                                    <option value="{{ $position }}">
                                 @endforeach
-                            </select>
+                            </datalist>
                         </div>
                         <div class="col-md-6"><label class="form-label">Customer/Klien</label><input type="text" class="form-control" name="nama_customer" value="{{ old('nama_customer') }}"></div>
                         <div class="col-md-6"><label class="form-label">Rencana Tanggal Masuk</label><input type="date" class="form-control" name="tanggal_masuk" value="{{ old('tanggal_masuk') }}"></div>
